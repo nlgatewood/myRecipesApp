@@ -1,0 +1,38 @@
+.addForm {
+
+   display: grid;
+   gap: 8px;
+}
+
+.addForm > button {
+
+   width: 10%;
+}
+
+.addForm > #addCode {
+
+   width: 15%;
+}
+
+.addForm > #addDesc {
+
+   width: 30%;
+}
+
+.delForm > ul {
+
+   margin-top: 16px;
+   list-style: none;
+   padding-left: 0px;
+   text-align: left;
+}
+
+.delRow {
+
+  display: grid;
+  grid-template-columns: 28px 120px 1fr 100px; /* checkbox | code | desc | actions */
+  column-gap: 20%;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}

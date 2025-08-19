@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 
 export default function Home() {
 
@@ -10,6 +11,8 @@ export default function Home() {
 	 <div className="card">
 	    <button onClick={() => setCount((count) => count+1)}> count is {count} </button> 
 	 </div>
+      {/* Simple link to another page */}
+      <p><Link to="/site-maintenance">Go to Site Maintenance</Link></p>
       </div>
   )
 }

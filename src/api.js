@@ -15,20 +15,39 @@ async function jsonOrThrow(res) {
   return data;
 }
 
-export async function listGenderCodes() {
-  const res = await fetch(apiPath('gender_codes'), { credentials: 'same-origin' });
+export async function listUnits() {
+  const res = await fetch(apiPath('units'), { credentials: 'same-origin' });
   return jsonOrThrow(res);
 }
 
-export async function upsertGenderCode({ gender_code, gender_desc, gender_long_desc }) {
-  const res = await fetch(apiPath('gender_codes'), {
+export async function insertUnits({ code, description }) {
+  const res = await fetch(apiPath('units'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ gender_code, gender_desc, gender_long_desc })
+    body: JSON.stringify({ code, description })
   });
   return jsonOrThrow(res);
 }
+
+// src/api.js
+export async function deleteUnit(code) {
+  const c = String(code || '').trim();
+  if (!c) throw new Error('code is required');
+
+  const res = await fetch(`${API_BASE}/units/${encodeURIComponent(c)}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  });
+  if (res.status === 204) return true;
+
+  let msg = res.statusText || 'Delete failed';
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch {}
+  throw new Error(msg);
+}
+
+
+
 
 export async function apiHealth() {
   const res = await fetch(apiPath('health'), { credentials: 'same-origin' });
