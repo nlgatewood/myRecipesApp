@@ -5,13 +5,13 @@ import { Pool } from 'pg';
 import format from 'pg-format';
 
 const pool = new Pool({
-  host: process.env.PGHOST,
-  port: process.env.PGPORT,
-  database: process.env.PGDATABASE,
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  max: 10,
-  idleTimeoutMillis: 10_000
+   host: process.env.PGHOST,
+   port: process.env.PGPORT,
+   database: process.env.PGDATABASE,
+   user: process.env.PGUSER,
+   password: process.env.PGPASSWORD,
+   max: 10,
+   idleTimeoutMillis: 10_000
 });
 
 const app = express();
@@ -50,7 +50,7 @@ app.get('/api/units', async (_req, res) => {
 
    try {
       const { rows } = await pool.query(`SELECT code, description 
-	                                 FROM units;`);
+                                         FROM units;`);
       res.json(rows);
    } 
    catch (e) {
@@ -99,9 +99,9 @@ app.delete('/api/units/:code', async (req, res) => {
 
    try {
       const { rows } = await pool.query(`DELETE FROM units 
-	                                 WHERE code = $1 
-	                                 RETURNING code`, 
-	                                 [code]);
+                                         WHERE code = $1 
+	                                      RETURNING code`, 
+	                                      [code]);
 
       if (!rows.length) return res.status(404).json({ error: 'not found' });
 
