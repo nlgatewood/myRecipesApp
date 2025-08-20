@@ -46,6 +46,57 @@ export async function deleteUnit(code) {
   throw new Error(msg);
 }
 
+/*--------------------------------------
+ * listIngredients()
+ *
+ *--------------------------------------*/
+export async function listIngredients() {
+
+   const res = await fetch(apiPath('ingredients'), { credentials: 'same-origin' });
+   return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * insertIngredient()
+ *
+ *--------------------------------------*/
+export async function insertIngredient({ name, description }) {
+
+   const res = await fetch(apiPath('ingredients'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name, description })
+   });
+
+   return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * deleteIngredient()
+ *
+ *--------------------------------------*/
+export async function deleteIngredient(id) {
+
+   const c = Number(id);
+   if (!c) throw new Error('id is required');
+
+   const res = await fetch(`${API_BASE}/ingredients/${encodeURIComponent(c)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+   });
+
+   if (res.status === 204) return true;
+
+   let msg = res.statusText || 'Delete failed';
+
+   try { 
+      const data = await res.json(); if (data?.error) msg = data.error; 
+   } 
+   catch {
+   }
+   throw new Error(msg);
+}
 
 
 

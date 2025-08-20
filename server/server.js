@@ -75,8 +75,6 @@ app.post('/api/units', async (req, res) => {
    try {
       const { rows } = await pool.query(`INSERT INTO units (code, description)
                                          VALUES ($1, $2)
-                                         ON CONFLICT (code)
-                                         DO UPDATE SET description = EXCLUDED.description
                                          RETURNING code, description;`,
                                          [code, description]);
 
@@ -99,9 +97,9 @@ app.delete('/api/units/:code', async (req, res) => {
 
    try {
       const { rows } = await pool.query(`DELETE FROM units 
-                                         WHERE code = $1 
-	                                      RETURNING code`, 
-	                                      [code]);
+                                         WHERE code = $1
+                                         RETURNING code`,
+                                         [code]);
 
       if (!rows.length) return res.status(404).json({ error: 'not found' });
 
@@ -116,5 +114,71 @@ app.delete('/api/units/:code', async (req, res) => {
   }
 });
 
+/*----------------------------------------------
+ * GET /api/ingredients
+ * -> [{ name, description }, ...]
+ * Returns a list of ingredients
+ *----------------------------------------------*/
+app.get('/api/ingredients', async (_req, res) => {
+
+   try {
+      const { rows } = await pool.query(`SELECT * FROM ingredients;`);
+      res.json(rows);                                                                                                                                                                                                                                                                      }                                                                                                                                                                                                                                                                                       catch (e) {                                                                                                                                                                                                                                                                                  res.status(500).json({ error: String(e) });                                                                                                                                                                                                                                        }                                                                                                                                                                                                                                                                                    });    
+
+/*----------------------------------------------
+ * POST /api/ingredients
+ * Body: { name: string, description: string }
+ * Insert into Ingredients table
+ *----------------------------------------------*/
+app.post('/api/ingredients', async (req, res) => {
+
+   const { name, description } = req.body ?? {};
+
+   if (!name || !description) {
+
+      return res.status(400).json({ error: 'name, description are required' });
+   }
+
+   try {
+      const { rows } = await pool.query(`INSERT INTO ingredients (id, name, description)
+                                         VALUES (NULL, $1, $2)
+                                         RETURNING id, name, description;`,
+                                         [name, description]);
+
+    res.status(201).json(rows[0]);
+   }
+   catch (e) {
+      res.status(500).json({ error: String(e) });
+   }
+});
+
+/*----------------------------------------------
+ * DELETE /api/ingredients/:code
+ * Body: { id: string }
+ *----------------------------------------------*/
+app.delete('/api/ingredients/:code', async (req, res) => {
+
+   const id = Number(req.params.id);
+
+   if (!id) return res.status(400).json({ error: 'id is required' });
+
+   try {
+      const { rows } = await pool.query(`DELETE FROM ingredients
+                                         WHERE id = $1
+                                         RETURNING id`,
+                                         [id]);
+
+      if (!rows.length) return res.status(404).json({ error: 'not found' });
+
+      return res.status(204).end(); // success, no body
+   }
+   catch (e) {
+
+      if (e.code === '23503') return res.status(409).json({ error: 'Unit is in use' });
+      console.error(e);
+
+      return res.status(500).json({ error: 'Server error' });
+  }
+});
 
 app.listen(process.env.PORT, '127.0.0.1', () => {console.log(`myrecipes API listening on http://127.0.0.1:${process.env.PORT}`);});
