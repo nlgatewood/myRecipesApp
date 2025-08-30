@@ -1,0 +1,202 @@
+/* ============================
+   AddRecipe.css
+   Styles for AddRecipe.jsx
+   ============================ */
+
+/* --- Card shell --- */
+.recipeDiv {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
+}
+
+/* --- Top section wrapper --- */
+.recipeElements {
+  display: grid;
+  gap: 20px; /* space between meta/times/ingredients/steps */
+}
+
+/* --- Groups: each field on its own line --- */
+.recipeMeta,
+.recipeTimes {
+  display: grid;
+  gap: 12px; /* space between fields */
+}
+
+/* Each span acts like a field group: label text + input */
+.recipeMeta > span,
+.recipeTimes > span {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #374151; /* slate-700 */
+}
+
+/* Inputs (top fields) */
+.recipeMeta input[type="text"],
+.recipeTimes input[type="text"] {
+  border: 1px solid #d1d5db;   /* gray-300 */
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;               /* gray-900 */
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.recipeName > input {
+
+   width: 50%;
+}
+
+.recipeDesc > input {
+
+   padding: 50px 15px;
+}
+
+.recipeMeta input[type="text"]:focus,
+.recipeTimes input[type="text"]:focus {
+  border-color: #3b82f6;         /* blue-500 */
+  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
+}
+
+/* --- Ingredients & Steps are full-width rows --- */
+.recipeElements .ingredients,
+.recipeElements .ingredientSteps {
+  grid-column: 1 / -1;  /* span all columns (future-proof if grid changes) */
+}
+
+.ingredients { margin-top: 12px; }
+.ingredientSteps { margin-top: 20px; }
+
+/* ============================
+   Ingredients table-like layout
+   ============================ */
+.ingredientList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+/* Header row (first li) */
+.ingredientList li:first-child {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr; /* name | qty | unit */
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;                     /* gray-500 */
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Data rows */
+.ingredientList li:not(:first-child) {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.ingredientList input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.ingredientList input[type="text"]:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
+}
+
+/* ============================
+   Steps table-like layout
+   ============================ */
+.ingredientStepList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+/* Header row (first li) */
+.ingredientStepList li:first-child {
+  display: grid;
+  grid-template-columns: 120px 1fr; /* rank | text */
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Data rows */
+.ingredientStepList li:not(:first-child) {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.ingredientStepList input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.ingredientStepList input[type="text"]:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59,130,246,.15);
+}
+
+/* --- Submit button --- */
+.addRecipeBtn {
+  margin-top: 20px;
+  margin-left: auto;          /* push to right */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #2563eb;  /* blue-600 */
+  background: #1d4ed8;        /* blue-700 */
+  color: #fff;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .06s ease, filter .15s ease, box-shadow .15s ease;
+}
+
+.addRecipeBtn:hover { filter: brightness(1.05); }
+.addRecipeBtn:active { transform: translateY(1px); }
+.addRecipeBtn:focus  { outline: none; box-shadow: 0 0 0 4px rgba(37,99,235,.2); }
+
+/* --- Small screens: stack table columns --- */
+@media (max-width: 520px) {
+  .ingredientList li:first-child,
+  .ingredientList li:not(:first-child) {
+    grid-template-columns: 1fr;
+  }
+  .ingredientStepList li:first-child,
+  .ingredientStepList li:not(:first-child) {
+    grid-template-columns: 1fr;
+  }
+}
+

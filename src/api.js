@@ -20,20 +20,20 @@ export async function listUnits() {
   return jsonOrThrow(res);
 }
 
-export async function insertUnits({ code, description }) {
+export async function insertUnits({ name, description }) {
   const res = await fetch(apiPath('units'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ code, description })
+    body: JSON.stringify({ name, description })
   });
   return jsonOrThrow(res);
 }
 
 // src/api.js
-export async function deleteUnit(code) {
-  const c = String(code || '').trim();
-  if (!c) throw new Error('code is required');
+export async function deleteUnit(id) {
+  const c = String(id || '').trim();
+  if (!c) throw new Error('id is required');
 
   const res = await fetch(`${API_BASE}/units/${encodeURIComponent(c)}`, {
     method: 'DELETE',

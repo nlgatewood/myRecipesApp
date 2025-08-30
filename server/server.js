@@ -49,7 +49,7 @@ app.get('/api/health', async (_req, res) => {
 app.get('/api/units', async (_req, res) => {
 
    try {
-      const { rows } = await pool.query(`SELECT code, description 
+      const { rows } = await pool.query(`SELECT id, name, description 
                                          FROM units;`);
       res.json(rows);
    } 
@@ -60,23 +60,23 @@ app.get('/api/units', async (_req, res) => {
 
 /*---------------------------------------------- 
  * POST /api/units
- * Body: { code: string, description: string }
+ * Body: { name: string, description: string }
  * Upsert on units.code.
  *----------------------------------------------*/
 app.post('/api/units', async (req, res) => {
 
-   const { code, description } = req.body ?? {};
+   const { name, description } = req.body ?? {};
 
-   if (!code || !description) {
+   if (!name || !description) {
 
-      return res.status(400).json({ error: 'code, description are required' });
+      return res.status(400).json({ error: 'name, description are required' });
    }
 
    try {
-      const { rows } = await pool.query(`INSERT INTO units (code, description)
+      const { rows } = await pool.query(`INSERT INTO units (name, description)
                                          VALUES ($1, $2)
-                                         RETURNING code, description;`,
-                                         [code, description]);
+                                         RETURNING id, name, description;`,
+                                         [name, description]);
 
     res.status(201).json(rows[0]);
    } 
@@ -86,20 +86,20 @@ app.post('/api/units', async (req, res) => {
 });
 
 /*---------------------------------------------- 
- * DELETE /api/units/:code
- * Body: { code: string }
+ * DELETE /api/units/:id
+ * Body: { id: BIGINT }
  *----------------------------------------------*/
-app.delete('/api/units/:code', async (req, res) => {
+app.delete('/api/units/:id', async (req, res) => {
 
-   const code = String(req.params.code || '').trim();
+   const id = (req.params.id || '').trim();
 
-   if (!code) return res.status(400).json({ error: 'code is required' });
+   if (!id) return res.status(400).json({ error: 'id is required' });
 
    try {
       const { rows } = await pool.query(`DELETE FROM units 
-                                         WHERE code = $1
-                                         RETURNING code`,
-                                         [code]);
+                                         WHERE id = $1
+                                         RETURNING id`,
+                                         [id]);
 
       if (!rows.length) return res.status(404).json({ error: 'not found' });
 
