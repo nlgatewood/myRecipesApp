@@ -42,6 +42,62 @@ app.get('/api/health', async (_req, res) => {
 });
 
 /*---------------------------------------------- 
+ * GET /api/categories-by-parent
+ * -> [{ code, parent_code }]
+ * Returns a list of categories
+ *----------------------------------------------*/
+app.get('/api/categories-by-parent', async (_req, res) => {
+
+   const { parentCode } = _req.query;
+
+   try {
+      let query = `SELECT code, parent_code, title
+                   FROM categories `;
+
+      const params = [];
+
+      if (parentCode) {
+         query += ` WHERE parent_code = $1`;
+         params.push(parentCode);
+      }
+      else {
+         query += ` WHERE parent_code IS NULL`
+      }
+
+      const { rows } = await pool.query(query, params);
+
+      res.json(rows);
+  }
+   catch (e) {
+        res.status(500).json({ error: String(e) });
+   }
+});
+
+/*---------------------------------------------- 
+ * GET /api/recipes-by-category
+ * -> [{ code }]
+ * Returns a list of categories
+ *----------------------------------------------*/
+app.get('/api/recipes-by-category', async (_req, res) => {
+
+   const { categoryCode } = _req.query;
+
+   try {
+      let query = `SELECT id, name
+                   FROM recipes 
+                   WHERE category_code = $1`;
+
+
+      const { rows } = await pool.query(query, [categoryCode]);
+
+      res.json(rows);
+  }
+   catch (e) {
+        res.status(500).json({ error: String(e) });
+   }
+});
+
+/*---------------------------------------------- 
  * GET /api/units
  * -> [{ code, description }, ...]
  * Returns a list of units

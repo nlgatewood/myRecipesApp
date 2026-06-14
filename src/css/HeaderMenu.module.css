@@ -1,0 +1,115 @@
+/* ===== Scoped styles: only affect the HeaderMenu component ============ */
+/* Structure expected:
+  <div class="header-wrapper">
+    <h1>My Recipes!</h1>
+    <nav class="link-list">
+      <NavLink>...</NavLink>
+    </nav>
+  </div>
+*/
+
+/* Theme tokens scoped to this component */
+.headerwrapper {
+  --menu-bg: #ffffff;
+  --menu-fg: #0f172a;        /* slate-900 */
+  --menu-border: #e5e7eb;    /* gray-200 */
+  --menu-muted: #6b7280;     /* gray-500 */
+  --menu-accent: #2563eb;    /* blue-600 */
+  --menu-accent-weak: rgba(37, 99, 235, 0.12);
+  --menu-ring: rgba(37, 99, 235, 0.45);
+
+  color: var(--menu-fg);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .headerwrapper {
+    --menu-bg: #0b1020;
+    --menu-fg: #e5e7eb;
+    --menu-border: #1f2937;
+    --menu-muted: #9ca3af;
+    --menu-accent: #60a5fa;
+    --menu-accent-weak: rgba(96, 165, 250, 0.18);
+    --menu-ring: rgba(96, 165, 250, 0.45);
+  }
+}
+
+/* Title */
+.headerwrapper > h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: clamp(1.25rem, 1.6vw + 1rem, 2rem);
+  letter-spacing: -0.015em;
+}
+
+/* Top nav container */
+.headerwrapper .linklist {
+  position: sticky;       /* keeps the menu visible at the top on scroll */
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  margin: 0 0 1rem 0;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,.04);
+  overflow-x: auto;        /* graceful horizontal scroll on narrow screens */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Links inside the nav */
+.headerwrapper .linklist a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.5rem;
+  color: var(--menu-fg);
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+.headerwrapper .linklist a:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .headerwrapper .linklist a:hover {
+    background: rgba(255,255,255,0.06);
+  }
+}
+
+.headerwrapper .linklist a:focus-visible {
+  outline: 2px solid var(--menu-ring);
+  outline-offset: 2px;
+}
+
+/* Active route state (NavLink applies aria-current="page"; some setups also add .active) */
+.headerwrapper .linklist a[aria-current="page"],
+.headerwrapper .linklist a.active {
+  color: var(--menu-accent);
+  background: var(--menu-accent-weak);
+}
+
+/* Compact tweaks on wider screens */
+@media (min-width: 720px) {
+  .headerwrapper .linklist {
+    gap: 8px;
+    padding: 0.55rem 0.6rem;
+  }
+  .headerwrapper .linklist a {
+    padding: 0.45rem 0.6rem;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .headerwrapper .linklist a {
+    transition: none;
+  }
+}

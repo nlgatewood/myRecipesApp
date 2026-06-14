@@ -15,11 +15,61 @@ async function jsonOrThrow(res) {
   return data;
 }
 
+/*--------------------------------------
+ * getCategoriesByParent()
+ *
+ *--------------------------------------*/
+export async function getCategoriesByParent(parentCode) {
+
+  const params = new URLSearchParams();
+
+  if (parentCode) {
+    params.set('parentCode', parentCode);
+  }
+
+  const url = `${apiPath('categories-by-parent')}${
+    params.toString() ? `?${params}` : ''
+  }`;
+
+  const res = await fetch(url, {credentials: 'same-origin'});
+
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * getRecipesByCategory()
+ *
+ *--------------------------------------*/
+export async function getRecipesByCategory(categoryCode) {
+
+  const params = new URLSearchParams();
+
+  if (categoryCode) {
+    params.set('categoryCode', categoryCode);
+  }
+
+  const url = `${apiPath('recipes-by-category')}${
+    params.toString() ? `?${params}` : ''
+  }`;
+
+  const res = await fetch(url, {credentials: 'same-origin'});
+
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * listUnits()
+ *
+ *--------------------------------------*/
 export async function listUnits() {
   const res = await fetch(apiPath('units'), { credentials: 'same-origin' });
   return jsonOrThrow(res);
 }
 
+/*--------------------------------------
+ * insertUnits()
+ *
+ *--------------------------------------*/
 export async function insertUnits({ name, description }) {
   const res = await fetch(apiPath('units'), {
     method: 'POST',
@@ -30,7 +80,10 @@ export async function insertUnits({ name, description }) {
   return jsonOrThrow(res);
 }
 
-// src/api.js
+/*--------------------------------------
+ * deleteUnit()
+ *
+ *--------------------------------------*/
 export async function deleteUnit(id) {
   const c = String(id || '').trim();
   if (!c) throw new Error('id is required');
