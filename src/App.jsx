@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink, Outlet } from 'react-router-dom'
-import styles from "./css/HeaderMenu.module.css";
-import Home from './components/Home.jsx'
+import HeaderMenu from './components/HeaderMenu.jsx';
+import Home from './pages/Home.jsx';
+import Recipes from './pages/Recipes.jsx';
 import SiteMaintenancePanel from './components/SiteMaintenancePanel';
 import AddRecipePanel from './components/AddRecipePanel';
 import './App.css'
@@ -15,24 +16,10 @@ function App() {
         <Route index element={<Home />} />
         <Route path="add-recipe" element={<AddRecipePanel />} />
         <Route path="site-maintenance" element={<SiteMaintenancePanel />} />
+        <Route path="recipes/:recipeId" element={<Recipes />} />
       </Route>
     </Routes>
-  )
-
-}
-
-function HeaderMenu(){
-
-  return (
-    <div className={styles.headerwrapper}>
-        <nav className={styles.linklist}>
-	        <NavLink to="/">Home</NavLink>
-            <NavLink to="/add-recipe">Add Recipes</NavLink>
-            <NavLink to="/site-maintenance">Site Maintenance</NavLink>
-        </nav>
-        <Outlet /> {/* Only route content renders here */}
-    </div>
-  )
+  );
 
 }
 

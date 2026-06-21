@@ -16,6 +16,69 @@ async function jsonOrThrow(res) {
 }
 
 /*--------------------------------------
+ * getRecipeDetails()
+ *
+ *--------------------------------------*/
+export async function getRecipeDetails(recipeId) {
+
+  const params = new URLSearchParams();
+
+  if (recipeId) {
+    params.set('recipeId', recipeId);
+  }
+
+  const url = `${apiPath('recipe-details')}${
+    params.toString() ? `?${params}` : ''
+  }`;
+
+  const res = await fetch(url, {credentials: 'same-origin'});
+
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * getRecipeIngredients()
+ *
+ *--------------------------------------*/
+export async function getRecipeIngredients(recipeId) {
+
+  const params = new URLSearchParams();
+
+  if (recipeId) {
+    params.set('recipeId', recipeId);
+  }
+
+  const url = `${apiPath('recipe-ingredients')}${
+    params.toString() ? `?${params}` : ''
+  }`;
+
+  const res = await fetch(url, {credentials: 'same-origin'});
+
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * getRecipeSteps()
+ *
+ *--------------------------------------*/
+export async function getRecipeSteps(recipeId) {
+
+  const params = new URLSearchParams();
+
+  if (recipeId) {
+    params.set('recipeId', recipeId);
+  }
+
+  const url = `${apiPath('recipe-steps')}${
+    params.toString() ? `?${params}` : ''
+  }`;
+
+  const res = await fetch(url, {credentials: 'same-origin'});
+
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
  * getCategoriesByParent()
  *
  *--------------------------------------*/

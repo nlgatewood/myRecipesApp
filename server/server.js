@@ -42,6 +42,79 @@ app.get('/api/health', async (_req, res) => {
 });
 
 /*---------------------------------------------- 
+ * GET /api/recipe-details
+ * -> {recipeId}
+ * Returns a recipes details in 'recipes' table
+ *----------------------------------------------*/
+app.get('/api/recipe-details', async (_req, res) => {
+
+   const { recipeId } = _req.query;
+
+   try {
+      let query = `select id, name, description, author, servings, prep_time, cook_time, category_code
+                   from recipes
+                   where id = $1`;
+
+      const { rows } = await pool.query(query, [recipeId]);
+
+      res.json(rows);
+  }
+   catch (e) {
+        res.status(500).json({ error: String(e) });
+   }
+});
+
+/*---------------------------------------------- 
+ * GET /api/recipe-ingredients
+ * -> {recipeId}
+ * Returns a recipe ingredients in 'recipe-ingredients' table
+ *----------------------------------------------*/
+app.get('/api/recipe-ingredients', async (_req, res) => {
+
+   const { recipeId } = _req.query;
+
+   try {
+      let query = `select r.recipe_id, r.ingredient_id, i.name, quantity, r.unit_id, u.description, r.ranking, r.optional
+                   from recipe_ingredients r 
+                        JOIN ingredients i on (r.ingredient_id = i.id)
+                        JOIN units u ON (r.unit_id = u.id)
+                   where r.recipe_id = $1
+                   order by ranking;`;
+
+      const { rows } = await pool.query(query, [recipeId]);
+
+      res.json(rows);
+  }
+   catch (e) {
+        res.status(500).json({ error: String(e) });
+   }
+});
+
+/*---------------------------------------------- 
+ * GET /api/recipe-steps
+ * -> {recipeId}
+ * Returns a recipe steps in 'recipe-steps' table
+ *----------------------------------------------*/
+app.get('/api/recipe-steps', async (_req, res) => {
+
+   const { recipeId } = _req.query;
+
+   try {
+      let query = `select id, description, ranking
+                   from recipe_steps
+                    where recipe_id = $1
+                   order by ranking`;
+
+      const { rows } = await pool.query(query, [recipeId]);
+
+      res.json(rows);
+  }
+   catch (e) {
+        res.status(500).json({ error: String(e) });
+   }
+});
+
+/*---------------------------------------------- 
  * GET /api/categories-by-parent
  * -> [{ code, parent_code }]
  * Returns a list of categories

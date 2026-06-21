@@ -1,6 +1,7 @@
 import React from "react";
 import { useEffect, useState } from 'react';
 import { apiHealth, getCategoriesByParent, getRecipesByCategory } from '../api';
+import { Link } from "react-router-dom";
 import styles from '../css/Categories.module.css';
 
 
@@ -78,7 +79,7 @@ function CategoriesPanel() {
          {recipes.map(recipe => (
 
             <span key={recipe.code}>
-               <a href='#' onClick={() =>handleBreadcrumbClick(recipe.id)}>{recipe.name}</a>
+                <Link to={`/recipes/${recipe.id}`}>{recipe.name}</Link>
             </span>
          ))}    
       </div>
