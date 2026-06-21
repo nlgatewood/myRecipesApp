@@ -57,7 +57,7 @@ app.get('/api/recipe-details', async (_req, res) => {
 
       const { rows } = await pool.query(query, [recipeId]);
 
-      res.json(rows);
+      res.json(rows[0]);
   }
    catch (e) {
         res.status(500).json({ error: String(e) });
@@ -74,7 +74,7 @@ app.get('/api/recipe-ingredients', async (_req, res) => {
    const { recipeId } = _req.query;
 
    try {
-      let query = `select r.recipe_id, r.ingredient_id, i.name, quantity, r.unit_id, u.description, r.ranking, r.optional
+      let query = `select r.recipe_id, r.ingredient_id, i.name, quantity, r.unit_id, u.description "unit_description", r.ranking, r.optional
                    from recipe_ingredients r 
                         JOIN ingredients i on (r.ingredient_id = i.id)
                         JOIN units u ON (r.unit_id = u.id)
