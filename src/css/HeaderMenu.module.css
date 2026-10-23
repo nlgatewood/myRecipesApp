@@ -184,3 +184,11 @@
     margin-bottom: 1.75rem;
   }
 }
+
+/* Printing a recipe: leave out the site header and menu */
+@media print {
+  .siteHeader,
+  .headerwrapper .linklist {
+    display: none;
+  }
+}

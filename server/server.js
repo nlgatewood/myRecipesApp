@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import { Pool } from 'pg';
 import format from 'pg-format';
 
@@ -16,7 +15,11 @@ const pool = new Pool({
 
 const app = express();
 app.use(express.json());
-app.use(cors({ methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'] }));
+//No CORS: nginx serves the site and the API from the same origin, so browsers only allow
+//the site's own pages to call it. (Allowing every origin would let any web page edit recipes.)
+
+//An idle connection can error (e.g. Postgres restarted). Without a listener Node treats it as fatal and exits
+pool.on('error', (err) => { console.error('[db] idle client error:', err.message); });
 
 //Set the search path (schema) for every new connection. Should be defined in the .env file as 'myrecipes'
 pool.on('connect', async (client) => {
@@ -48,7 +51,10 @@ app.get('/api/health', async (_req, res) => {
  *----------------------------------------------*/
 app.get('/api/recipe-details', async (_req, res) => {
 
-   const { recipeId } = _req.query;
+   const recipeId = parseId(_req.query.recipeId);
+
+   //Not a valid id -> same empty answer as an id that doesn't exist, so the page shows "not found"
+   if (!recipeId) return res.json(null);
 
    try {
       let query = `select id, name, description, author, servings, prep_time, cook_time, keywords, category_code
@@ -71,12 +77,13 @@ app.get('/api/recipe-details', async (_req, res) => {
  *----------------------------------------------*/
 app.get('/api/recipe-ingredients', async (_req, res) => {
 
-   const { recipeId } = _req.query;
+   const recipeId = parseId(_req.query.recipeId);
+
+   if (!recipeId) return res.json([]);
 
    try {
-      let query = `select r.recipe_id, r.ingredient_id, i.name, quantity, r.unit_id, u.description "unit_description", r.ranking, r.optional
+      let query = `select r.id, r.recipe_id, r.ingredient_description, quantity, r.unit_id, u.description "unit_description", r.ranking, r.optional
                    from recipe_ingredients r 
-                        JOIN ingredients i on (r.ingredient_id = i.id)
                         LEFT JOIN units u ON (r.unit_id = u.id)
                    where r.recipe_id = $1
                    order by ranking;`;
@@ -97,7 +104,9 @@ app.get('/api/recipe-ingredients', async (_req, res) => {
  *----------------------------------------------*/
 app.get('/api/recipe-steps', async (_req, res) => {
 
-   const { recipeId } = _req.query;
+   const recipeId = parseId(_req.query.recipeId);
+
+   if (!recipeId) return res.json([]);
 
    try {
       let query = `select id, description, ranking
@@ -117,10 +126,9 @@ app.get('/api/recipe-steps', async (_req, res) => {
 /*----------------------------------------------
  * POST /api/recipes
  * Body: { name, description, author, servings, prep_time, cook_time, keywords, category_code,
- *         ingredients: [{ name, quantity, unit_id, optional }],
+ *         ingredients: [{ ingredient_description, quantity, unit_id, optional }],
  *         steps: [{ description }] }
  * Inserts a recipe with its ingredients and steps in one transaction.
- * Ingredients are matched by name (case-insensitive) and created if they don't exist yet.
  * Ingredient and step ranking follows the order of the arrays.
  *----------------------------------------------*/
 app.post('/api/recipes', async (req, res) => {
@@ -146,7 +154,7 @@ app.post('/api/recipes', async (req, res) => {
       res.status(201).json({ id: recipeId });
    }
    catch (e) {
-      await client.query('ROLLBACK');
+      await rollback(client);
       sendRecipeSaveError(res, e);
    }
    finally {
@@ -183,7 +191,7 @@ app.put('/api/recipes/:id', async (req, res) => {
                                            [...recipeColumnValues(recipe), id]);
 
       if (!rows.length) {
-         await client.query('ROLLBACK');
+         await rollback(client);
          return res.status(404).json({ error: 'not found' });
       }
 
@@ -196,13 +204,19 @@ app.put('/api/recipes/:id', async (req, res) => {
       res.json({ id: rows[0].id });
    }
    catch (e) {
-      await client.query('ROLLBACK');
+      await rollback(client);
       sendRecipeSaveError(res, e);
    }
    finally {
       client.release();
    }
 });
+
+//ROLLBACK that can't throw, so a broken connection doesn't turn into an unhandled rejection
+async function rollback(client) {
+   try { await client.query('ROLLBACK'); }
+   catch (e) { console.error('[db] rollback failed:', e.message); }
+}
 
 //Validates the body shared by POST and PUT /api/recipes. Returns { error } or { recipe }
 function parseRecipeBody(body) {
@@ -227,12 +241,33 @@ function parseRecipeBody(body) {
       return { error: 'name and category_code are required' };
    }
 
+   //Same limits as the form and the VARCHAR(50) columns, so a long value gets a clear message instead of a 500
+   if (recipe.name.length > 50) return { error: 'Keep the name to 50 characters or fewer.' };
+   if (String(recipe.author ?? '').length > 50) return { error: 'Keep the author to 50 characters or fewer.' };
+
+   //'All recipes' is the root of the tree, not a category a recipe can be filed in (the form doesn't offer it)
+   if (category_code === ROOT_CATEGORY) return { error: 'Pick a category other than "All recipes".' };
+
    if ([recipe.servings, recipe.prep_time, recipe.cook_time].some(Number.isNaN)) {
       return { error: 'servings, prep_time and cook_time must be whole numbers' };
    }
 
    if (!Array.isArray(ingredients) || !Array.isArray(steps)) {
       return { error: 'ingredients and steps must be arrays' };
+   }
+
+   if (ingredients.some(i => !String(i?.ingredient_description ?? '').trim())) {
+      return { error: 'Every ingredient needs a description.' };
+   }
+
+   const badNumber = (value, check) => value !== null && value !== undefined && value !== '' && !check(Number(value));
+
+   if (ingredients.some(i => badNumber(i.quantity, n => Number.isFinite(n) && n > 0))) {
+      return { error: 'Ingredient quantities must be numbers above 0.' };
+   }
+
+   if (ingredients.some(i => badNumber(i.unit_id, n => Number.isInteger(n) && n > 0))) {
+      return { error: 'Unknown unit.' };
    }
 
    return { recipe };
@@ -249,11 +284,9 @@ async function insertRecipeChildren(client, recipeId, recipe) {
 
    for (const [index, ingredient] of recipe.ingredients.entries()) {
 
-      const ingredientId = await findOrCreateIngredient(client, String(ingredient.name ?? '').trim());
-
-      await client.query(`INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit_id, ranking, optional)
+      await client.query(`INSERT INTO recipe_ingredients (recipe_id, ingredient_description, quantity, unit_id, ranking, optional)
                           VALUES ($1, $2, $3, $4, $5, $6)`,
-                          [recipeId, ingredientId, ingredient.quantity ?? null, ingredient.unit_id || null,
+                          [recipeId, String(ingredient.ingredient_description).trim(), ingredient.quantity ?? null, ingredient.unit_id || null,
                            index + 1, ingredient.optional ? 1 : 0]);
    }
 
@@ -268,10 +301,8 @@ async function insertRecipeChildren(client, recipeId, recipe) {
 //Maps database errors from a recipe save to a friendly message
 function sendRecipeSaveError(res, e) {
 
-   if (e.code === '23505') return res.status(409).json({ error: 'The same ingredient is listed more than once.' });
    if (e.code === '23503') return res.status(400).json({ error: 'Unknown category or unit.' });
    if (e.code === '23514' || e.code === '22003') return res.status(400).json({ error: 'One of the numbers is out of range.' });
-   if (e.message === 'ingredient name is required') return res.status(400).json({ error: 'Every ingredient needs a name.' });
 
    console.error(e);
    res.status(500).json({ error: String(e) });
@@ -280,7 +311,6 @@ function sendRecipeSaveError(res, e) {
 /*----------------------------------------------
  * DELETE /api/recipes/:id
  * Deletes a recipe. Its ingredients, steps and images are removed by ON DELETE CASCADE.
- * Shared rows in the ingredients table are kept.
  *----------------------------------------------*/
 app.delete('/api/recipes/:id', async (req, res) => {
 
@@ -313,40 +343,188 @@ function toIntOrNull(value) {
    return Number.isInteger(n) ? n : NaN;
 }
 
-//Returns the id of an ingredient by name (case-insensitive), inserting it if it doesn't exist
-async function findOrCreateIngredient(client, name) {
-
-   if (!name) throw new Error('ingredient name is required');
-
-   const found = await client.query(`SELECT id FROM ingredients
-                                     WHERE lower(name) = lower($1)
-                                     LIMIT 1`, [name]);
-
-   if (found.rows.length) return found.rows[0].id;
-
-   const created = await client.query(`INSERT INTO ingredients (name, description)
-                                       VALUES ($1, $1)
-                                       RETURNING id`, [name]);
-   return created.rows[0].id;
-}
-
 /*----------------------------------------------
  * GET /api/categories
- * -> [{ code, parent_code, title }]
- * Returns every category (used to build the category picker)
+ * -> [{ code, parent_code, title, description, recipe_count }]
+ * Returns every category (used to build the category picker and tree).
+ * recipe_count is the number of recipes filed directly in the category
  *----------------------------------------------*/
 app.get('/api/categories', async (_req, res) => {
 
    try {
-      const { rows } = await pool.query(`SELECT code, parent_code, title
-                                         FROM categories
-                                         ORDER BY title`);
+      const { rows } = await pool.query(`SELECT c.code, c.parent_code, c.title, c.description, count(r.id)::int "recipe_count"
+                                         FROM categories c
+                                              LEFT JOIN recipes r ON (r.category_code = c.code)
+                                         GROUP BY c.code
+                                         ORDER BY c.title`);
       res.json(rows);
    }
    catch (e) {
       res.status(500).json({ error: String(e) });
    }
 });
+
+/*----------------------------------------------
+ * POST /api/categories
+ * Body: { title, description?, parent_code }
+ * Inserts a category. The code is generated from the title (e.g. "Muffins" -> "MUFFI")
+ *----------------------------------------------*/
+app.post('/api/categories', async (req, res) => {
+
+   const { error, title, description, parent_code } = parseCategoryBody(req.body);
+
+   if (error) return res.status(400).json({ error });
+
+   try {
+      const problem = await categoryPlacementProblem({ title, parent_code });
+      if (problem) return res.status(problem.status).json({ error: problem.error });
+
+      const code = await generateCategoryCode(title);
+
+      const { rows } = await pool.query(`INSERT INTO categories (code, parent_code, title, description)
+                                         VALUES ($1, $2, $3, $4)
+                                         RETURNING code, parent_code, title, description, 0 "recipe_count"`,
+                                         [code, parent_code, title, description]);
+
+      res.status(201).json(rows[0]);
+   }
+   catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That category code was just taken. Please try again.' });
+      res.status(500).json({ error: String(e) });
+   }
+});
+
+/*----------------------------------------------
+ * PUT /api/categories/:code
+ * Body: { title, description?, parent_code }
+ * Updates a category's title/description or moves it under another parent.
+ * The code itself never changes (recipes reference it). The root 'ALL' can't be edited
+ *----------------------------------------------*/
+app.put('/api/categories/:code', async (req, res) => {
+
+   const code = String(req.params.code ?? '');
+   const { error, title, description, parent_code } = parseCategoryBody(req.body);
+
+   if (code === ROOT_CATEGORY) return res.status(400).json({ error: 'The "All recipes" category can\'t be changed.' });
+   if (error) return res.status(400).json({ error });
+
+   try {
+      const problem = await categoryPlacementProblem({ code, title, parent_code });
+      if (problem) return res.status(problem.status).json({ error: problem.error });
+
+      const { rows } = await pool.query(`UPDATE categories
+                                         SET title = $1, description = $2, parent_code = $3
+                                         WHERE code = $4
+                                         RETURNING code, parent_code, title, description`,
+                                         [title, description, parent_code, code]);
+
+      if (!rows.length) return res.status(404).json({ error: 'not found' });
+
+      res.json(rows[0]);
+   }
+   catch (e) {
+      res.status(500).json({ error: String(e) });
+   }
+});
+
+/*----------------------------------------------
+ * DELETE /api/categories/:code
+ * Only empty categories can be deleted (no recipes, no subcategories).
+ * Checked here because the schema's ON DELETE SET NULL would otherwise
+ * silently turn the subcategories into stray top-level categories
+ *----------------------------------------------*/
+app.delete('/api/categories/:code', async (req, res) => {
+
+   const code = String(req.params.code ?? '');
+
+   if (code === ROOT_CATEGORY) return res.status(400).json({ error: 'The "All recipes" category can\'t be deleted.' });
+
+   try {
+      const { rows: [usage] } = await pool.query(`SELECT (SELECT count(*) FROM categories WHERE parent_code = $1)::int "children",
+                                                         (SELECT count(*) FROM recipes WHERE category_code = $1)::int "recipes"`,
+                                                  [code]);
+
+      if (usage.children > 0) return res.status(409).json({ error: "Can't delete: move or delete its subcategories first." });
+      if (usage.recipes > 0) return res.status(409).json({ error: "Can't delete: move its recipes to another category first." });
+
+      const { rows } = await pool.query(`DELETE FROM categories
+                                         WHERE code = $1
+                                         RETURNING code`,
+                                         [code]);
+
+      if (!rows.length) return res.status(404).json({ error: 'not found' });
+
+      return res.status(204).end(); // success, no body
+   }
+   catch (e) {
+
+      if (e.code === '23503') return res.status(409).json({ error: "Can't delete: this category is still in use." });
+      console.error(e);
+
+      return res.status(500).json({ error: 'Server error' });
+   }
+});
+
+const ROOT_CATEGORY = 'ALL';
+
+//Validates { title, description, parent_code }. Returns { error } or the cleaned values
+function parseCategoryBody(body) {
+
+   const title = String(body?.title ?? '').trim();
+   const description = String(body?.description ?? '').trim();   // column is NOT NULL, so blank is stored as ''
+   const parent_code = String(body?.parent_code || ROOT_CATEGORY);
+
+   if (!title) return { error: 'title is required' };
+   if (title.length > 50) return { error: 'Keep the title to 50 characters or fewer.' };
+
+   return { title, description, parent_code };
+}
+
+//Checks the parent exists, isn't the category itself or one of its descendants (which would
+//create a loop), and that no sibling already has the same title. Returns { status, error } or null
+async function categoryPlacementProblem({ code = null, title, parent_code }) {
+
+   const parent = await pool.query(`SELECT 1 FROM categories WHERE code = $1`, [parent_code]);
+   if (!parent.rows.length) return { status: 400, error: 'Unknown parent category.' };
+
+   if (code) {
+      const loop = await pool.query(`WITH RECURSIVE tree AS (
+                                        SELECT code FROM categories WHERE code = $1
+                                        UNION
+                                        SELECT c.code FROM categories c JOIN tree t ON (c.parent_code = t.code)
+                                     )
+                                     SELECT 1 FROM tree WHERE code = $2`, [code, parent_code]);
+
+      if (loop.rows.length) return { status: 400, error: "A category can't be moved inside itself or one of its subcategories." };
+   }
+
+   const sibling = await pool.query(`SELECT 1 FROM categories
+                                     WHERE parent_code = $1
+                                       AND lower(title) = lower($2)
+                                       AND code <> coalesce($3, '')
+                                     LIMIT 1`, [parent_code, title, code]);
+
+   if (sibling.rows.length) return { status: 409, error: `There's already a "${title}" category there.` };
+
+   return null;
+}
+
+//Builds a short unique code from the title, like the existing ones: "Muffins" -> "MUFFI", then "MUFF1", "MUFF2"...
+async function generateCategoryCode(title) {
+
+   const base = title.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) || 'CAT';
+
+   for (let n = 0; n < 1000; n++) {
+
+      const suffix = n === 0 ? '' : String(n);
+      const code = base.slice(0, 5 - suffix.length) + suffix;
+
+      const { rows } = await pool.query(`SELECT 1 FROM categories WHERE code = $1`, [code]);
+      if (!rows.length) return code;
+   }
+
+   throw new Error('Could not generate a category code');
+}
 
 /*----------------------------------------------
  * GET /api/recipe-search
@@ -367,11 +545,10 @@ app.get('/api/recipe-search', async (_req, res) => {
 
    try {
       let query = `SELECT r.id, r.name, r.description, r.prep_time, r.cook_time, r.keywords, r.category_code, c.title "category_title",
-                          ARRAY(SELECT i.name
+                          ARRAY(SELECT ri.ingredient_description
                                 FROM recipe_ingredients ri
-                                     JOIN ingredients i ON (ri.ingredient_id = i.id)
                                 WHERE ri.recipe_id = r.id
-                                  AND i.name ILIKE ANY ($1::text[])
+                                  AND ri.ingredient_description ILIKE ANY ($1::text[])
                                 ORDER BY ri.ranking) "matched_ingredients"
                    FROM recipes r
                         JOIN categories c ON (r.category_code = c.code)
@@ -381,9 +558,8 @@ app.get('/api/recipe-search', async (_req, res) => {
                                                 OR coalesce(r.keywords, '') ILIKE term
                                                 OR EXISTS (SELECT 1
                                                            FROM recipe_ingredients ri
-                                                                JOIN ingredients i ON (ri.ingredient_id = i.id)
                                                            WHERE ri.recipe_id = r.id
-                                                             AND i.name ILIKE term)))
+                                                             AND ri.ingredient_description ILIKE term)))
                    ORDER BY CASE WHEN r.name ILIKE $2 THEN 0
                                  WHEN r.name ILIKE $3 THEN 1
                                  ELSE 2 END,
@@ -414,38 +590,6 @@ app.get('/api/recipe-counts', async (_req, res) => {
    }
    catch (e) {
       res.status(500).json({ error: String(e) });
-   }
-});
-
-/*----------------------------------------------
- * GET /api/categories-by-parent
- * -> [{ code, parent_code }]
- * Returns a list of categories
- *----------------------------------------------*/
-app.get('/api/categories-by-parent', async (_req, res) => {
-
-   const { parentCode } = _req.query;
-
-   try {
-      let query = `SELECT code, parent_code, title
-                   FROM categories `;
-
-      const params = [];
-
-      if (parentCode) {
-         query += ` WHERE parent_code = $1`;
-         params.push(parentCode);
-      }
-      else {
-         query += ` WHERE parent_code IS NULL`
-      }
-
-      const { rows } = await pool.query(query, params);
-
-      res.json(rows);
-  }
-   catch (e) {
-        res.status(500).json({ error: String(e) });
    }
 });
 
@@ -485,44 +629,44 @@ app.get('/api/recipes-by-category', async (_req, res) => {
    }
 });
 
-/*---------------------------------------------- 
+/*----------------------------------------------
  * GET /api/units
- * -> [{ code, description }, ...]
- * Returns a list of units
+ * -> [{ id, name, description, recipe_count }, ...]
+ * Returns every unit, with the number of recipes that use it
  *----------------------------------------------*/
 app.get('/api/units', async (_req, res) => {
 
    try {
-      const { rows } = await pool.query(`SELECT id, name, description 
-                                         FROM units;`);
+      const { rows } = await pool.query(`SELECT u.id, u.name, u.description, count(DISTINCT ri.recipe_id)::int "recipe_count"
+                                         FROM units u
+                                              LEFT JOIN recipe_ingredients ri ON (ri.unit_id = u.id)
+                                         GROUP BY u.id
+                                         ORDER BY lower(u.name)`);
       res.json(rows);
-   } 
+   }
    catch (e) {
-        res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: String(e) });
    }
 });
 
-/*---------------------------------------------- 
+/*----------------------------------------------
  * POST /api/units
  * Body: { name: string, description: string }
- * Upsert on units.code.
+ * Inserts a unit. Names are unique (case-sensitive, so "L" and "l" can differ)
  *----------------------------------------------*/
 app.post('/api/units', async (req, res) => {
 
-   const { name, description } = req.body ?? {};
+   const { error, name, description } = parseLookupBody(req.body, { descriptionRequired: true });
 
-   if (!name || !description) {
-
-      return res.status(400).json({ error: 'name, description are required' });
-   }
+   if (error) return res.status(400).json({ error });
 
    try {
       const { rows } = await pool.query(`INSERT INTO units (name, description)
                                          VALUES ($1, $2)
-                                         RETURNING id, name, description;`,
+                                         RETURNING id, name, description, 0 "recipe_count"`,
                                          [name, description]);
 
-    res.status(201).json(rows[0]);
+      res.status(201).json(rows[0]);
    }
    catch (e) {
       if (e.code === '23505') return res.status(409).json({ error: `A unit named "${name}" already exists.` });
@@ -530,85 +674,48 @@ app.post('/api/units', async (req, res) => {
    }
 });
 
-/*---------------------------------------------- 
- * DELETE /api/units/:id
- * Body: { id: BIGINT }
+/*----------------------------------------------
+ * PUT /api/units/:id
+ * Body: { name: string, description: string }
+ * Updates a unit. Recipes using it pick up the change automatically
  *----------------------------------------------*/
-app.delete('/api/units/:id', async (req, res) => {
+app.put('/api/units/:id', async (req, res) => {
 
-   const id = (req.params.id || '').trim();
+   const id = parseId(req.params.id);
+   const { error, name, description } = parseLookupBody(req.body, { descriptionRequired: true });
 
    if (!id) return res.status(400).json({ error: 'id is required' });
+   if (error) return res.status(400).json({ error });
 
    try {
-      const { rows } = await pool.query(`DELETE FROM units 
-                                         WHERE id = $1
-                                         RETURNING id`,
-                                         [id]);
+      const { rows } = await pool.query(`UPDATE units
+                                         SET name = $1, description = $2
+                                         WHERE id = $3
+                                         RETURNING id, name, description`,
+                                         [name, description, id]);
 
       if (!rows.length) return res.status(404).json({ error: 'not found' });
 
-      return res.status(204).end(); // success, no body
-   } 
-   catch (e) {
-
-      if (e.code === '23503') return res.status(409).json({ error: 'Unit is in use' });
-      console.error(e);
-
-      return res.status(500).json({ error: 'Server error' });
-  }
-});
-
-/*----------------------------------------------
- * GET /api/ingredients
- * -> [{ name, description }, ...]
- * Returns a list of ingredients
- *----------------------------------------------*/
-app.get('/api/ingredients', async (_req, res) => {
-
-   try {
-      const { rows } = await pool.query(`SELECT * FROM ingredients;`);
-      res.json(rows);                                                                                                                                                                                                                                                                      }                                                                                                                                                                                                                                                                                       catch (e) {                                                                                                                                                                                                                                                                                  res.status(500).json({ error: String(e) });                                                                                                                                                                                                                                        }                                                                                                                                                                                                                                                                                    });    
-
-/*----------------------------------------------
- * POST /api/ingredients
- * Body: { name: string, description: string }
- * Insert into Ingredients table
- *----------------------------------------------*/
-app.post('/api/ingredients', async (req, res) => {
-
-   const { name, description } = req.body ?? {};
-
-   if (!name || !description) {
-
-      return res.status(400).json({ error: 'name, description are required' });
-   }
-
-   try {
-      const { rows } = await pool.query(`INSERT INTO ingredients (id, name, description)
-                                         VALUES (NULL, $1, $2)
-                                         RETURNING id, name, description;`,
-                                         [name, description]);
-
-    res.status(201).json(rows[0]);
+      res.json(rows[0]);
    }
    catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: `A unit named "${name}" already exists.` });
       res.status(500).json({ error: String(e) });
    }
 });
 
 /*----------------------------------------------
- * DELETE /api/ingredients/:code
- * Body: { id: string }
+ * DELETE /api/units/:id
+ * Fails with 409 if a recipe uses the unit
  *----------------------------------------------*/
-app.delete('/api/ingredients/:code', async (req, res) => {
+app.delete('/api/units/:id', async (req, res) => {
 
-   const id = Number(req.params.id);
+   const id = parseId(req.params.id);
 
    if (!id) return res.status(400).json({ error: 'id is required' });
 
    try {
-      const { rows } = await pool.query(`DELETE FROM ingredients
+      const { rows } = await pool.query(`DELETE FROM units
                                          WHERE id = $1
                                          RETURNING id`,
                                          [id]);
@@ -619,11 +726,30 @@ app.delete('/api/ingredients/:code', async (req, res) => {
    }
    catch (e) {
 
-      if (e.code === '23503') return res.status(409).json({ error: 'Unit is in use' });
+      if (e.code === '23503') return res.status(409).json({ error: "Can't delete: this unit is used by at least one recipe." });
       console.error(e);
 
       return res.status(500).json({ error: 'Server error' });
   }
 });
+
+//Validates { name, description } for the units routes. Returns { error } or { name, description }
+function parseLookupBody(body, { descriptionRequired }) {
+
+   const name = String(body?.name ?? '').trim();
+   const description = String(body?.description ?? '').trim();
+
+   if (!name) return { error: 'name is required' };
+   if (descriptionRequired && !description) return { error: 'description is required' };
+
+   return { name, description: description || null };
+}
+
+//Route ids must be positive integers. Returns the id, or null if invalid
+function parseId(value) {
+
+   const id = Number(value);
+   return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 app.listen(process.env.PORT, '127.0.0.1', () => {console.log(`myrecipes API listening on http://127.0.0.1:${process.env.PORT}`);});

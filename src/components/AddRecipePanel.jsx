@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getRecipeDetails, getRecipeIngredients, getRecipeSteps, insertRecipe, listCategories,
-         listIngredients, listUnits, updateRecipe } from '../api';
+         listUnits, updateRecipe } from '../api';
 import { formatQuantity } from '../format';
 import styles from '../css/AddRecipe.module.css';
 
@@ -25,12 +25,13 @@ function parseQuantity(text) {
    if (!value) return null;
 
    const mixed = value.match(/^(\d+)\s+(\d+)\/(\d+)$/);
-   if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
-
    const fraction = value.match(/^(\d+)\/(\d+)$/);
-   if (fraction) return Number(fraction[1]) / Number(fraction[2]);
 
-   const n = Number(value);
+   const n = mixed ? Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3])
+           : fraction ? Number(fraction[1]) / Number(fraction[2])
+           : Number(value);
+
+   //Catches "1/0" (Infinity) as well as text that isn't a number
    return Number.isFinite(n) ? n : NaN;
 }
 
@@ -75,7 +76,7 @@ export default function AddRecipe() {
 
    //Row keys come from a counter (crypto.randomUUID isn't available over plain http)
    const nextKey = useRef(0);
-   const newIngredient = () => ({ key: nextKey.current++, name: '', quantity: '', unitId: '', optional: false });
+   const newIngredient = () => ({ key: nextKey.current++, description: '', quantity: '', unitId: '', optional: false });
    const newStep = () => ({ key: nextKey.current++, description: '' });
 
    const [form, setForm] = useState(() => ({ ...EMPTY_FORM, categoryCode: searchParams.get('category') ?? '' }));
@@ -83,7 +84,6 @@ export default function AddRecipe() {
    const [steps, setSteps] = useState(() => [newStep(), newStep(), newStep()]);
 
    const [categories, setCategories] = useState([]);
-   const [ingredientNames, setIngredientNames] = useState([]);
    const [units, setUnits] = useState([]);
 
    const [errors, setErrors] = useState({});
@@ -124,7 +124,7 @@ export default function AddRecipe() {
 
             setIngredients(ingredientData.map(i => ({
                key: nextKey.current++,
-               name: i.name,
+               description: toText(i.ingredient_description),
                quantity: formatQuantity(i.quantity),   // "1.500" -> "1 1/2"
                unitId: toText(i.unit_id),
                optional: i.optional === 1
@@ -153,19 +153,17 @@ export default function AddRecipe() {
       async function loadOptions() {
 
          try {
-            const [categoryData, ingredientData, unitData] = await Promise.all([
+            const [categoryData, unitData] = await Promise.all([
                listCategories(),
-               listIngredients(),
                listUnits()
             ]);
 
             setCategories(buildCategoryOptions(categoryData));
-            setIngredientNames(ingredientData.map(i => i.name));
             setUnits(unitData);
 
          } catch (err) {
             console.error("Failed to load form options:", err);
-            setLoadError('Could not load categories, ingredients and units. Check that the API is running.');
+            setLoadError('Could not load categories and units. Check that the API is running.');
          }
       }
 
@@ -210,26 +208,23 @@ export default function AddRecipe() {
       if (!isWholeNumber(form.prepTime, 0)) found.prepTime = 'Enter prep time in whole minutes.';
       if (!isWholeNumber(form.cookTime, 0)) found.cookTime = 'Enter cook time in whole minutes.';
 
-      const seen = new Set();
       const ingredientRows = [];
 
       for (const row of ingredients) {
 
-         const ingredientName = row.name.trim();
-         if (!ingredientName && !row.quantity.trim() && !row.unitId) continue;
+         const ingredientDescription = row.description.trim();
+         if (!ingredientDescription && !row.quantity.trim() && !row.unitId) continue;
 
          const quantity = parseQuantity(row.quantity);
          const errorKey = `ingredient-${row.key}`;
 
-         if (!ingredientName) found[errorKey] = 'Enter an ingredient name.';
-         else if (seen.has(ingredientName.toLowerCase())) found[errorKey] = 'This ingredient is already listed.';
+         if (!ingredientDescription) found[errorKey] = 'Enter the ingredient.';
          else if (quantity !== null && (Number.isNaN(quantity) || quantity <= 0)) {
             found[errorKey] = 'Quantity must be a number like 2, 1.5, 1/2 or 1 1/2.';
          }
 
-         seen.add(ingredientName.toLowerCase());
          ingredientRows.push({
-            name: ingredientName,
+            ingredient_description: ingredientDescription,
             quantity,
             unit_id: row.unitId ? Number(row.unitId) : null,
             optional: row.optional
@@ -464,18 +459,14 @@ export default function AddRecipe() {
                {/* ---------- Ingredients ---------- */}
                <section className={styles.section}>
                   <h2 className={styles.sectionTitle}>Ingredients</h2>
-                  <p className={styles.hint}>Pick an existing ingredient or type a new one; new ingredients are added automatically.</p>
-
-                  <datalist id="ingredient-options">
-                     {ingredientNames.map(name => <option key={name} value={name} />)}
-                  </datalist>
+                  <p className={styles.hint}>Type each ingredient the way you want it to read, e.g. “all-purpose flour, sifted”.</p>
 
                   <div className={styles.list}>
                      {ingredients.length > 0 && (
                         <div className={`${styles.ingredientRow} ${styles.headerRow}`} aria-hidden="true">
-                           <span>Ingredient</span>
                            <span>Quantity</span>
                            <span>Unit</span>
+                           <span>Ingredient</span>
                            <span>Optional</span>
                            <span />
                         </div>
@@ -486,17 +477,6 @@ export default function AddRecipe() {
 
                         return (
                            <div key={row.key} className={`${styles.ingredientRow} ${error ? styles.rowInvalid : ''}`}>
-                              <label className={styles.cell}>
-                                 <span className={styles.cellLabel}>Ingredient</span>
-                                 <input
-                                    type="text"
-                                    list="ingredient-options"
-                                    value={row.name}
-                                    onChange={e => updateRow(setIngredients, row.key, { name: e.target.value })}
-                                    placeholder="Flour"
-                                 />
-                              </label>
-
                               <label className={styles.cell}>
                                  <span className={styles.cellLabel}>Quantity</span>
                                  <input
@@ -518,6 +498,16 @@ export default function AddRecipe() {
                                        <option key={u.id} value={u.id}>{u.description}</option>
                                     ))}
                                  </select>
+                              </label>
+
+                              <label className={`${styles.cell} ${styles.ingredientCell}`}>
+                                 <span className={styles.cellLabel}>Ingredient</span>
+                                 <input
+                                    type="text"
+                                    value={row.description}
+                                    onChange={e => updateRow(setIngredients, row.key, { description: e.target.value })}
+                                    placeholder="All-purpose flour"
+                                 />
                               </label>
 
                               <label className={styles.checkboxCell}>

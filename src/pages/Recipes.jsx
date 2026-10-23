@@ -5,14 +5,14 @@ import { deleteRecipe, getRecipeDetails, getRecipeIngredients, getRecipeSteps, l
 import { formatMinutes, formatQuantity, totalMinutes } from '../format';
 import styles from '../css/Recipes.module.css';
 
-//Units are stored like "Cup(s)". Show "Cup" for 1 or less, "Cups" otherwise.
+//Units are stored like "Cup(s)" or "Pinch(es)". Show "Cup"/"Pinch" for 1 or less, "Cups"/"Pinches" otherwise.
 //'Count' isn't shown at all ("2 Eggs" rather than "2 Count Eggs")
 function formatUnit(description, quantity) {
 
    if (!description || description === 'Count') return '';
 
    const plural = quantity === null || Number(quantity) > 1;
-   return description.replace('(s)', plural ? 's' : '');
+   return description.replace(/\((e?s)\)/, (_, ending) => (plural ? ending : ''));
 }
 
 //Walks up the category tree to build ["Breads", "Quick Breads", "Fruit Breads"], skipping the root 'All'
@@ -80,6 +80,17 @@ export default function Recipes() {
    //Go back to where the user came from (keeps their category drill-down), or home if they landed here directly
    const goBack = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/'));
 
+   //Opens the browser's print dialog, where "Save as PDF" is one of the destinations.
+   //The page title becomes the suggested PDF file name, so use the recipe name while printing
+   function onPrint() {
+
+      const siteTitle = document.title;
+      document.title = recipe.name;
+
+      window.addEventListener('afterprint', () => { document.title = siteTitle; }, { once: true });
+      window.print();
+   }
+
    async function onDelete() {
 
       setDeleting(true);
@@ -133,6 +144,15 @@ export default function Recipes() {
 
                {!confirmingDelete && (
                   <div className={styles.toolbarActions}>
+                     <button type="button" className={styles.printBtn} onClick={onPrint}
+                             aria-label="Print or save as PDF" title="Print or save as PDF">
+                        {/* Printer */}
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                           <path d="M7 9V3h10v6" />
+                           <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+                           <path d="M7 14h10v7H7z" />
+                        </svg>
+                     </button>
                      <Link to={`/recipes/${recipeId}/edit`} className={styles.editBtn}>Edit recipe</Link>
                      <button type="button" className={styles.deleteBtn} onClick={() => setConfirmingDelete(true)}>
                         Delete
@@ -204,10 +224,10 @@ export default function Recipes() {
                            .filter(Boolean).join(' ');
 
                         return (
-                           <li key={ingredient.ingredient_id} className={styles.ingredient}>
+                           <li key={ingredient.id} className={styles.ingredient}>
                               <span className={styles.amount}>{amount}</span>
                               <span className={styles.ingredientName}>
-                                 {ingredient.name}
+                                 {ingredient.ingredient_description}
                                  {ingredient.optional === 1 && <span className={styles.optionalTag}>optional</span>}
                               </span>
                            </li>

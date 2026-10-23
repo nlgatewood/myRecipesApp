@@ -223,7 +223,9 @@
 }
 
 .ingredientRow {
-  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.4fr) 72px auto;
+  /* Quantity | Unit | Ingredient | Optional | actions. The actions column is fixed (3 x 36px buttons + gaps)
+     so the header row, which has no buttons, splits the space the same way and its labels line up */
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) minmax(0, 2.6fr) 72px 116px;
 }
 
 .stepRow {
@@ -231,9 +233,6 @@
   align-items: start;
 }
 
-.headerRow {
-  padding: 0 4px;
-}
 
 .headerRow span {
   font-size: 0.78rem;
@@ -463,7 +462,7 @@
     background: var(--ar-subtle);
   }
 
-  .ingredientRow .cell:first-child {
+  .ingredientRow .ingredientCell {
     grid-column: 1 / -1;
   }
 

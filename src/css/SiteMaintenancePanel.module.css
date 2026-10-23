@@ -1,4 +1,4 @@
-/* ===== Scoped styles: only affect the SiteMaintenancePanel component == */
+/* ===== Scoped styles: SiteMaintenancePanel + LookupManager ============ */
 /* Tokens and card/section styling mirror AddRecipe.module.css so the pages feel the same */
 
 .page {
@@ -11,6 +11,7 @@
   --sm-label: #374151;
   --sm-muted: #6b7280;
   --sm-accent: #4f46e5;
+  --sm-accent-weak: rgba(79, 70, 229, 0.08);
   --sm-ring: rgba(79, 70, 229, 0.18);
   --sm-primary: #4f46e5;
   --sm-danger: #b91c1c;
@@ -34,6 +35,7 @@
     --sm-label: #cbd5e1;
     --sm-muted: #9ca3af;
     --sm-accent: #a5b4fc;
+    --sm-accent-weak: rgba(165, 180, 252, 0.10);
     --sm-ring: rgba(165, 180, 252, 0.25);
     --sm-danger: #fca5a5;
     --sm-danger-bg: rgba(248, 113, 113, 0.12);
@@ -50,6 +52,16 @@
   border-radius: 18px;
   padding: 28px;
   box-shadow: var(--sm-shadow);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* ---------- Header ---------- */
@@ -106,14 +118,56 @@
   border-color: transparent;
 }
 
+/* ---------- Tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 24px;
+  border-bottom: 1px solid var(--sm-border);
+  overflow-x: auto;
+}
+
+.tab {
+  margin-bottom: -1px;   /* sit on top of the tab bar's bottom border */
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 10px 10px 0 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--sm-muted);
+  background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.tab:hover {
+  color: var(--sm-fg);
+  background: var(--sm-subtle);
+}
+
+.activeTab,
+.activeTab:hover {
+  color: var(--sm-accent);
+  border-bottom-color: var(--sm-accent);
+  background: var(--sm-accent-weak);
+}
+
 /* ---------- Sections ---------- */
 .section {
-  padding-top: 24px;
-  margin-top: 24px;
-  border-top: 1px solid var(--sm-border);
+  padding-top: 20px;
 }
 
 .sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.sectionHeading {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -131,8 +185,9 @@
 }
 
 .hint {
-  margin: 4px 0 16px;
+  margin: 6px 0 16px;
   font-size: 0.85rem;
+  line-height: 1.5;
   color: var(--sm-muted);
 }
 
@@ -149,6 +204,53 @@
   margin: 0;
   font-size: 0.85rem;
   color: var(--sm-danger);
+}
+
+.muted {
+  color: var(--sm-muted);
+}
+
+/* ---------- Inputs (add form, filter, inline edit) ---------- */
+.field input,
+.filter input,
+.cellInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--sm-input-border);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 16px; /* prevents iPhone zoom on focus */
+  color: var(--sm-fg);
+  background: var(--sm-input-bg);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field input::placeholder,
+.filter input::placeholder,
+.cellInput::placeholder {
+  color: var(--sm-muted);
+  opacity: 0.8;
+}
+
+.field input:focus,
+.filter input:focus,
+.cellInput:focus {
+  outline: none;
+  border-color: var(--sm-accent);
+  box-shadow: 0 0 0 4px var(--sm-ring);
+}
+
+.filter input {
+  width: 240px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.cellInput {
+  padding: 8px 10px;
+  border-radius: 10px;
 }
 
 /* ---------- Add form ---------- */
@@ -176,28 +278,9 @@
   color: var(--sm-label);
 }
 
-.field input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--sm-input-border);
-  border-radius: 12px;
-  padding: 11px 14px;
-  font: inherit;
-  font-size: 16px; /* prevents iPhone zoom on focus */
-  color: var(--sm-fg);
-  background: var(--sm-input-bg);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.field input::placeholder {
+.optional {
+  font-weight: 400;
   color: var(--sm-muted);
-  opacity: 0.8;
-}
-
-.field input:focus {
-  outline: none;
-  border-color: var(--sm-accent);
-  box-shadow: 0 0 0 4px var(--sm-ring);
 }
 
 .formError {
@@ -207,11 +290,13 @@
 /* ---------- Buttons ---------- */
 .primaryBtn,
 .ghostBtn,
-.dangerBtn {
+.dangerBtn,
+.saveBtn {
   border-radius: 12px;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 
@@ -222,7 +307,6 @@
   color: #ffffff;
   background: var(--sm-primary);
   box-shadow: 0 8px 18px rgba(79, 70, 229, 0.22);
-  white-space: nowrap;
 }
 
 .primaryBtn:hover:not(:disabled) {
@@ -230,7 +314,8 @@
 }
 
 .ghostBtn,
-.dangerBtn {
+.dangerBtn,
+.saveBtn {
   padding: 6px 12px;
   font-size: 0.88rem;
   border-radius: 10px;
@@ -246,6 +331,12 @@
   background: var(--sm-subtle);
 }
 
+.saveBtn {
+  border: 1px solid transparent;
+  color: #ffffff;
+  background: var(--sm-primary);
+}
+
 .dangerBtn {
   border: 1px solid transparent;
   color: #ffffff;
@@ -256,15 +347,20 @@
   background: #b91c1c;
 }
 
-.iconBtn {
+.iconBtn,
+.iconPlaceholder {
   width: 34px;
   height: 34px;
+  flex: none;
+}
+
+.iconBtn {
   padding: 0;
   display: grid;
   place-items: center;
   border: 1px solid transparent;
   border-radius: 10px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1;
   color: var(--sm-muted);
   background: transparent;
@@ -272,6 +368,11 @@
 }
 
 .iconBtn:hover {
+  color: var(--sm-accent);
+  background: var(--sm-accent-weak);
+}
+
+.removeBtn:hover {
   color: var(--sm-danger);
   background: var(--sm-danger-bg);
 }
@@ -286,7 +387,7 @@
   outline-offset: 2px;
 }
 
-/* ---------- Units table ---------- */
+/* ---------- List table ---------- */
 .table {
   margin-top: 16px;
 }
@@ -302,7 +403,7 @@
 
 .row {
   display: grid;
-  grid-template-columns: minmax(6rem, 1fr) minmax(0, 3fr) auto;
+  grid-template-columns: minmax(7rem, 1.2fr) minmax(0, 2.5fr) 9.5rem 11rem;
   align-items: center;
   gap: 4px 16px;
   min-height: 52px;
@@ -316,6 +417,11 @@
 
 .rows .row:nth-child(even) {
   background: var(--sm-subtle);
+}
+
+.rows .editing,
+.rows .editing:nth-child(even) {
+  background: var(--sm-accent-weak);
 }
 
 .rows .confirming,
@@ -336,6 +442,12 @@
   letter-spacing: 0.04em;
 }
 
+.name {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-weight: 600;
@@ -345,6 +457,12 @@
 .desc {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.usage {
+  font-size: 0.85rem;
+  color: var(--sm-muted);
+  white-space: nowrap;
 }
 
 .actions {
@@ -361,8 +479,9 @@
   color: var(--sm-danger);
 }
 
-.rowError {
+.rowNote {
   grid-column: 1 / -1;
+  margin: 0;
 }
 
 /* ---------- Tablet ---------- */
@@ -378,6 +497,42 @@
   .primaryBtn {
     grid-column: 1 / -1;
   }
+
+  .headerRow {
+    display: none;
+  }
+
+  /* Name, description and usage stack on the left; buttons on the right */
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 10px 10px 14px;
+  }
+
+  .row > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .row > :nth-child(2) { grid-column: 1; grid-row: 2; }
+  .usage               { grid-column: 1; grid-row: 3; }
+  .actions             { grid-column: 2; grid-row: 1 / span 3; }
+  .rowNote             { grid-row: 4; }
+
+  .desc {
+    font-size: 0.92rem;
+    color: var(--sm-muted);
+  }
+
+  /* While editing, inputs go full width with the Save/Cancel buttons underneath */
+  .editing {
+    grid-template-columns: 1fr;
+  }
+
+  .editing .actions {
+    grid-column: 1;
+    grid-row: 4;
+    justify-content: flex-end;
+  }
+
+  .editing .rowNote {
+    grid-row: 5;
+  }
 }
 
 /* ---------- Phone ---------- */
@@ -392,40 +547,234 @@
     padding: 14px;
   }
 
-  .headerRow {
-    display: none;
+  .sectionHeader,
+  .filter,
+  .filter input {
+    width: 100%;
   }
 
-  /* Code above description, delete button on the right */
-  .row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: 10px 10px 10px 14px;
-  }
-
-  .code {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .desc {
-    grid-column: 1;
-    grid-row: 2;
-    font-size: 0.92rem;
-    color: var(--sm-muted);
-  }
-
-  .actions {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-
-  .rowError {
-    grid-row: 3;
+  .tab {
+    padding: 10px 12px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .page * {
     transition: none;
+  }
+}
+
+/* ===== Categories tab (CategoryManager) =============================== */
+
+.field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--sm-input-border);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 16px; /* prevents iPhone zoom on focus */
+  color: var(--sm-fg);
+  background: var(--sm-input-bg);
+}
+
+.field select:focus {
+  outline: none;
+  border-color: var(--sm-accent);
+  box-shadow: 0 0 0 4px var(--sm-ring);
+}
+
+/* Title | Inside | Description | button */
+.categoryForm {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1.6fr) auto;
+}
+
+.treeTools {
+  display: flex;
+  gap: 4px;
+}
+
+.linkBtn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--sm-accent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  background: var(--sm-accent-weak);
+}
+
+.tree {
+  margin-top: 16px;
+}
+
+.treeRow {
+  padding: 6px 10px 6px calc(10px + var(--depth, 0) * 28px);   /* indent one step per level */
+}
+
+.tree .treeRow + .treeRow {
+  border-top: 1px solid var(--sm-border);
+}
+
+.tree .treeRow:nth-child(even) {
+  background: var(--sm-subtle);
+}
+
+.tree .editing,
+.tree .editing:nth-child(even) {
+  background: var(--sm-accent-weak);
+}
+
+.tree .confirming,
+.tree .confirming:nth-child(even) {
+  background: var(--sm-danger-bg);
+}
+
+.treeMain {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 44px;
+}
+
+.toggle,
+.toggleSpacer {
+  width: 30px;
+  height: 30px;
+}
+
+.toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--sm-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  color: var(--sm-fg);
+  background: var(--sm-accent-weak);
+}
+
+.chevronOpen,
+.chevronClosed {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.treeText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.treeTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.codeChip {
+  padding: 1px 6px;
+  border: 1px solid var(--sm-border);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--sm-muted);
+}
+
+.treeDesc {
+  font-size: 0.85rem;
+  color: var(--sm-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Edit panel opens under the row, lined up with the title */
+.editPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+  margin: 8px 0 6px 42px;
+}
+
+.editWide {
+  grid-column: 1 / -1;
+}
+
+.editActions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.treeNote {
+  margin: 2px 0 4px 42px;
+}
+
+@media (max-width: 760px) {
+  .categoryForm {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .categoryForm .field:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  /* Usage moves under the title; buttons stay on the right */
+  .treeMain {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+
+  .treeMain .usage {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: -2px;
+  }
+
+  .treeMain .actions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .categoryForm {
+    grid-template-columns: 1fr;
+  }
+
+  /* Smaller indent steps so deep categories still fit on a phone */
+  .treeRow {
+    padding-left: calc(6px + var(--depth, 0) * 16px);
+  }
+
+  .editPanel {
+    grid-template-columns: 1fr;
+    margin-left: 0;
+  }
+
+  .treeNote {
+    margin-left: 0;
   }
 }

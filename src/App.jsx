@@ -14,10 +14,11 @@ function App() {
       <Route element={<HeaderMenu />}>
         {/* Use an index route for "/" */}
         <Route index element={<Home />} />
-        <Route path="add-recipe" element={<AddRecipePanel />} />
+        {/* Different keys so going from Edit to Add mounts a fresh, empty form instead of reusing the edit form's state */}
+        <Route path="add-recipe" element={<AddRecipePanel key="add" />} />
         <Route path="site-maintenance" element={<SiteMaintenancePanel />} />
         <Route path="recipes/:recipeId" element={<Recipes />} />
-        <Route path="recipes/:recipeId/edit" element={<AddRecipePanel />} />
+        <Route path="recipes/:recipeId/edit" element={<AddRecipePanel key="edit" />} />
       </Route>
     </Routes>
   );

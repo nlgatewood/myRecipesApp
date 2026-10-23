@@ -1,7 +1,7 @@
 -- ============================================================
 -- PostgreSQL DDL for MyRecipesApp
--- Defines schema for categories, units, recipes, ingredients,
--- recipe_ingredients (xref), and recipe_steps
+-- Defines schema for categories, units, recipes,
+-- recipe_ingredients, recipe_steps, and recipe_images
 -- ============================================================
 
 -- Set the schema to 'myrecipes'
@@ -29,8 +29,8 @@ CREATE INDEX IF NOT EXISTS idx_categories_parent_code
 
 -- Documentation
 COMMENT ON TABLE categories IS 'Recipe categories in a simple hierarchy (self-referential).';
-COMMENT ON COLUMN categories.code IS 'Short, stable category identifier (e.g., "DSRT"). Max 5 chars; primary key.';
-COMMENT ON COLUMN categories.parent_code IS 'Optional parent category; NULL for top-level. References categories.category_code.';
+COMMENT ON COLUMN categories.code IS 'Short, stable category identifier (e.g., "BRDFR"). Generated from the title (5 chars); primary key.';
+COMMENT ON COLUMN categories.parent_code IS 'Parent category; NULL only for the root "ALL". References categories.code.';
 COMMENT ON COLUMN categories.title IS 'Category title viewable on the page';
 COMMENT ON COLUMN categories.description IS 'Human-readable category description.';
 
@@ -80,9 +80,8 @@ CREATE TABLE recipes (
      CHECK (cook_time >= 0)	 
 );
 
--- Indexes for category lookups and keyword searching
+-- Index for category lookups. (Keyword search uses ILIKE '%word%', which a plain index can't help with.)
 CREATE INDEX IF NOT EXISTS idx_recipe_category_code ON recipes(category_code);
-CREATE INDEX IF NOT EXISTS idx_recipe_keywords      ON recipes(keywords);
 
 COMMENT ON TABLE recipes IS 'Top-level recipes with basic metadata and category assignment.';
 COMMENT ON COLUMN recipes.id IS 'Surrogate key for recipes.';
@@ -93,66 +92,48 @@ COMMENT ON COLUMN recipes.servings IS 'Number of portions the recipe makes. Smal
 COMMENT ON COLUMN recipes.prep_time IS 'Preparation time in minutes (chopping, mixing, etc.). Smallint; must be >= 0.';
 COMMENT ON COLUMN recipes.cook_time IS 'Cooking time in minutes (baking, simmering, etc.). Smallint; must be >= 0.';
 COMMENT ON COLUMN recipes.keywords IS 'Free-text keywords for search/discovery.';
-COMMENT ON COLUMN recipes.category_code IS 'FK to categories.category_code. Classifies the recipe.';
+COMMENT ON COLUMN recipes.category_code IS 'FK to categories.code. Classifies the recipe.';
 COMMENT ON COLUMN recipes.activity_date IS 'Timestamp for creation/update activity; defaults to now().';
 
 -- ============================================================
--- 4. Ingredients
--- Normalized list of ingredients used across recipes.
--- ============================================================
-CREATE TABLE ingredients (
-   id          BIGSERIAL PRIMARY KEY,
-   name        TEXT NOT NULL,
-   description TEXT,
-   
-   CONSTRAINT uq_ingredients_name UNIQUE (name)
-);
-
-COMMENT ON TABLE ingredients IS 'Normalized list of ingredients.';
-COMMENT ON COLUMN ingredients.id IS 'Surrogate key for ingredients.';
-COMMENT ON COLUMN ingredients.name IS 'Ingredient display name (<= 50 chars). Consider enforcing case-insensitive uniqueness.';
-COMMENT ON COLUMN ingredients.description IS 'Optional notes or clarifications for the ingredient.';
-
--- ============================================================
--- 5. Recipe ↔ Ingredients (xref)
--- Join table linking recipes to their ingredients, with quantities.
+-- 4. Recipe Ingredients
+-- Ingredients for each recipe, written as free text, with quantities.
 -- ============================================================
 CREATE TABLE recipe_ingredients (
-   recipe_id      BIGINT NOT NULL,
-   ingredient_id  BIGINT NOT NULL,
-   quantity       NUMERIC(10,3),
-   unit_id	      BIGINT,
-   ranking		  SMALLINT NOT NULL,
-   optional       SMALLINT,
-   
-   PRIMARY KEY (recipe_id, ingredient_id),
+   id                      BIGSERIAL PRIMARY KEY,
+   recipe_id               BIGINT NOT NULL,
+   ingredient_description  TEXT,
+   quantity                NUMERIC(10,3),
+   unit_id	               BIGINT,
+   ranking		           SMALLINT NOT NULL,
+   optional                SMALLINT,
+
    CONSTRAINT fk_recipe_ingredient_recipe_id
      FOREIGN KEY (recipe_id) REFERENCES recipes (id) ON DELETE CASCADE,
-   CONSTRAINT fk_recipe_ingredient_ingredient_id
-     FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE RESTRICT,
    CONSTRAINT fk_recipe_ingredient_unit
      FOREIGN KEY (unit_id) REFERENCES units (id) ON DELETE RESTRICT,
    CONSTRAINT ck_recipe_ingredients_quantity
      CHECK (quantity IS NULL OR quantity > 0)
 );
 
--- Composite index for efficient lookups by ingredient → recipes
-CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient_recipe
-  ON recipe_ingredients (ingredient_id, recipe_id);
+-- Loads a recipe's ingredients in display order
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe
+  ON recipe_ingredients (recipe_id, ranking);
 
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_unit
   ON recipe_ingredients (unit_id);
 
-COMMENT ON TABLE recipe_ingredients IS 'Join table linking recipes to ingredients with quantity + unit.';
+COMMENT ON TABLE recipe_ingredients IS 'Ingredients for each recipe with quantity + unit.';
+COMMENT ON COLUMN recipe_ingredients.id IS 'Surrogate key for recipe_ingredients.';
 COMMENT ON COLUMN recipe_ingredients.recipe_id IS 'FK to recipes.id.';
-COMMENT ON COLUMN recipe_ingredients.ingredient_id IS 'FK to ingredients.id.';
-COMMENT ON COLUMN recipe_ingredients.quantity IS 'Amount of the ingredient (nullable; e.g., NULL for "to taste"). NUMERIC(8,2).';
+COMMENT ON COLUMN recipe_ingredients.ingredient_description IS 'Free-text ingredient as written in the recipe (e.g., "Ground cinnamon").';
+COMMENT ON COLUMN recipe_ingredients.quantity IS 'Amount of the ingredient (nullable; e.g., NULL for "to taste"). NUMERIC(10,3).';
 COMMENT ON COLUMN recipe_ingredients.unit_id IS 'FK to units.id describing the quantity unit (nullable if quantity is NULL).';
 COMMENT ON COLUMN recipe_ingredients.ranking IS 'The order/ranking the ingredients are displayed.';
 COMMENT ON COLUMN recipe_ingredients.optional IS 'Signifies if the ingredient is optional or not. 1 = optional';
 
 -- ============================================================
--- 6. Recipe Steps
+-- 5. Recipe Steps
 -- Ordered preparation instructions for each recipe.
 -- ============================================================
 CREATE TABLE recipe_steps (
@@ -178,7 +159,7 @@ COMMENT ON COLUMN recipe_steps.ranking IS '1-based step order; positive smallint
 
 
 -- ============================================================
--- 7. Recipe Images
+-- 6. Recipe Images
 -- Images of the Recipe dishes.
 -- ============================================================
 CREATE TABLE recipe_images (
