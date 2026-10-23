@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getRecipeDetails, getRecipeIngredients, getRecipeSteps, insertRecipe, listCategories,
-         listUnits, updateRecipe } from '../api';
+import { getRecipeDetails, getRecipeImages, getRecipeIngredients, getRecipeSteps, imageSrc, insertRecipe,
+         listCategories, listUnits, saveRecipeImages, updateRecipe } from '../api';
 import { formatQuantity } from '../format';
 import styles from '../css/AddRecipe.module.css';
 
@@ -17,6 +17,11 @@ const EMPTY_FORM = {
 };
 
 const MAX_SMALLINT = 32767;
+
+//Same limits as PUT /api/recipes/:id/images
+const MAX_IMAGES = 20;
+const MAX_IMAGE_MB = 20;
+const IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
 
 //Parses "2", "1.5", "1/2" or "1 1/2". Returns null when blank and NaN when it can't be read
 function parseQuantity(text) {
@@ -83,6 +88,14 @@ export default function AddRecipe() {
    const [ingredients, setIngredients] = useState(() => [newIngredient(), newIngredient(), newIngredient()]);
    const [steps, setSteps] = useState(() => [newStep(), newStep(), newStep()]);
 
+   //Photos: saved ones have an id and url, new ones a File and a local preview URL
+   const [images, setImages] = useState([]);
+   const [imageError, setImageError] = useState('');
+   const previewUrls = useRef(new Set());
+
+   //A new recipe whose photos failed to upload is already saved; retrying updates it instead of adding a copy
+   const savedId = useRef(null);
+
    const [categories, setCategories] = useState([]);
    const [units, setUnits] = useState([]);
 
@@ -100,10 +113,11 @@ export default function AddRecipe() {
       async function loadRecipe() {
 
          try {
-            const [recipe, ingredientData, stepData] = await Promise.all([
+            const [recipe, ingredientData, stepData, imageData] = await Promise.all([
                getRecipeDetails(recipeId),
                getRecipeIngredients(recipeId),
-               getRecipeSteps(recipeId)
+               getRecipeSteps(recipeId),
+               getRecipeImages(recipeId)
             ]);
 
             if (!recipe) {
@@ -131,6 +145,7 @@ export default function AddRecipe() {
             })));
 
             setSteps(stepData.map(s => ({ key: nextKey.current++, description: s.description })));
+            setImages(imageData.map(i => ({ key: nextKey.current++, id: i.id, src: imageSrc(i.url), alt: toText(i.alt) })));
             setRecipeStatus('ready');
 
          } catch (err) {
@@ -169,6 +184,42 @@ export default function AddRecipe() {
 
       loadOptions();
    }, []);
+
+   //Free the local previews when leaving the page
+   useEffect(() => {
+      const urls = previewUrls.current;
+      return () => urls.forEach(url => URL.revokeObjectURL(url));
+   }, []);
+
+   function addImages(e) {
+
+      const picked = [...e.target.files];
+      e.target.value = '';   // lets the same file be picked again after removing it
+      setImageError('');
+
+      const tooBig = picked.filter(f => f.size > MAX_IMAGE_MB * 1024 * 1024);
+      const accepted = picked.filter(f => f.type.startsWith('image/') && !tooBig.includes(f))
+                             .slice(0, MAX_IMAGES - images.length);
+
+      if (tooBig.length) setImageError(`Skipped ${tooBig.map(f => f.name).join(', ')}: photos must be ${MAX_IMAGE_MB} MB or smaller.`);
+      else if (accepted.length < picked.length) setImageError(`A recipe can have up to ${MAX_IMAGES} photos.`);
+
+      const added = accepted.map(file => {
+         const src = URL.createObjectURL(file);
+         previewUrls.current.add(src);
+         return { key: nextKey.current++, file, src, alt: '' };
+      });
+
+      setImages(prev => [...prev, ...added]);
+   }
+
+   function removeImage(image) {
+      if (image.file) {
+         URL.revokeObjectURL(image.src);
+         previewUrls.current.delete(image.src);
+      }
+      removeRow(setImages, image.key);
+   }
 
    const updateField = (e) => {
       const { name, value } = e.target;
@@ -264,19 +315,33 @@ export default function AddRecipe() {
 
       setSaving(true);
 
+      let id = recipeId ?? savedId.current;
+
       try {
-         if (editing) {
-            await updateRecipe(recipeId, payload);
-            leave();   // the recipe page reloads its data when it mounts again
-         } else {
-            const saved = await insertRecipe(payload);
-            navigate(`/recipes/${saved.id}`);
-         }
+         if (id) await updateRecipe(id, payload);
+         else id = savedId.current = (await insertRecipe(payload)).id;
       } catch (err) {
          console.error("Failed to save recipe:", err);
          setSaveError(err.message || 'Failed to save the recipe.');
          setSaving(false);
+         return;
       }
+
+      try {
+         //Editing always syncs, so removed photos get deleted. A new recipe only needs it when photos were added
+         if (editing || images.length) {
+            const saved = await saveRecipeImages(id, images.map(({ id, file, alt }) => ({ id, file, alt: alt.trim() })));
+            setImages(saved.map(i => ({ key: nextKey.current++, id: i.id, src: imageSrc(i.url), alt: toText(i.alt) })));
+         }
+      } catch (err) {
+         console.error("Failed to save photos:", err);
+         setSaveError(`The recipe was saved, but the photos weren't: ${err.message || 'upload failed'}`);
+         setSaving(false);
+         return;
+      }
+
+      if (editing) leave();   // the recipe page reloads its data when it mounts again
+      else navigate(`/recipes/${id}`);
    }
 
    const errorCount = Object.keys(errors).length;
@@ -577,6 +642,56 @@ export default function AddRecipe() {
                   <button type="button" className={styles.addRowBtn} onClick={() => setSteps(prev => [...prev, newStep()])}>
                      + Add step
                   </button>
+               </section>
+
+               {/* ---------- Photos ---------- */}
+               <section className={styles.section}>
+                  <h2 className={styles.sectionTitle}>Photos</h2>
+                  <p className={styles.hint}>The first photo is the main one. Use the arrows to change the order.</p>
+
+                  {images.length > 0 ? (
+                     <ul className={styles.imageGrid}>
+                        {images.map((image, index) => (
+                           <li key={image.key} className={styles.imageCard}>
+                              <div className={styles.imageFrame}>
+                                 <img src={image.src} alt={image.alt || `Photo ${index + 1}`} />
+                                 {index === 0 && <span className={styles.coverBadge}>Main</span>}
+                              </div>
+
+                              <label className={styles.cell}>
+                                 <span className={styles.srOnly}>Caption for photo {index + 1}</span>
+                                 <input
+                                    type="text"
+                                    value={image.alt}
+                                    onChange={e => updateRow(setImages, image.key, { alt: e.target.value })}
+                                    maxLength={200}
+                                    placeholder="Caption (optional)"
+                                 />
+                              </label>
+
+                              <div className={styles.rowActions}>
+                                 <button type="button" className={styles.iconBtn} onClick={() => moveRow(setImages, index, -1)}
+                                         disabled={index === 0} aria-label={`Move photo ${index + 1} earlier`}>←</button>
+                                 <button type="button" className={styles.iconBtn} onClick={() => moveRow(setImages, index, 1)}
+                                         disabled={index === images.length - 1} aria-label={`Move photo ${index + 1} later`}>→</button>
+                                 <button type="button" className={`${styles.iconBtn} ${styles.removeBtn}`}
+                                         onClick={() => removeImage(image)} aria-label={`Remove photo ${index + 1}`}>✕</button>
+                              </div>
+                           </li>
+                        ))}
+                     </ul>
+                  ) : (
+                     <p className={styles.empty}>No photos yet.</p>
+                  )}
+
+                  <FieldError message={imageError} />
+
+                  {images.length < MAX_IMAGES && (
+                     <label className={styles.addRowBtn}>
+                        + Add photos
+                        <input type="file" accept={IMAGE_TYPES} multiple onChange={addImages} className={styles.srOnly} />
+                     </label>
+                  )}
                </section>
 
                {/* ---------- Actions ---------- */}

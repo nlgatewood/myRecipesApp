@@ -2,6 +2,11 @@ import 'dotenv/config';
 import express from 'express';
 import { Pool } from 'pg';
 import format from 'pg-format';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import multer from 'multer';
+import sharp from 'sharp';
 
 const pool = new Pool({
    host: process.env.PGHOST,
@@ -25,6 +30,14 @@ pool.on('error', (err) => { console.error('[db] idle client error:', err.message
 pool.on('connect', async (client) => {
    await client.query(format('SET search_path TO %I, pg_catalog', process.env.PGSCHEMA));
 });
+
+//Recipe photos are kept on disk (outside the Vite build and git). recipe_images.url holds 'images/<file>',
+//which the client turns into /myrecipes/api/images/<file>
+const IMAGE_DIR = process.env.IMAGE_DIR || path.resolve(import.meta.dirname, '../data/images');
+await fs.mkdir(IMAGE_DIR, { recursive: true });
+
+//File names are unique and never rewritten, so browsers can cache them for good
+app.use('/api/images', express.static(IMAGE_DIR, { maxAge: '365d', immutable: true }));
 
 // server log
 app.use((req, _res, next) => { console.log(`[api] ${req.method} ${req.url}`); next(); });
@@ -319,12 +332,17 @@ app.delete('/api/recipes/:id', async (req, res) => {
    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'id is required' });
 
    try {
+      //The cascade removes the image rows, so look up their files first
+      const { rows: images } = await pool.query(`SELECT url FROM recipe_images WHERE recipe_id = $1`, [id]);
+
       const { rows } = await pool.query(`DELETE FROM recipes
                                          WHERE id = $1
                                          RETURNING id`,
                                          [id]);
 
       if (!rows.length) return res.status(404).json({ error: 'not found' });
+
+      await removeImageFiles(images.map(i => i.url));
 
       return res.status(204).end(); // success, no body
    }
@@ -333,6 +351,205 @@ app.delete('/api/recipes/:id', async (req, res) => {
       return res.status(500).json({ error: 'Server error' });
    }
 });
+
+/*----------------------------------------------
+ * GET /api/recipe-images
+ * -> {recipeId}
+ * Returns a recipe's images in display order: [{ id, url, alt, sort_order }]
+ *----------------------------------------------*/
+app.get('/api/recipe-images', async (req, res) => {
+
+   const recipeId = parseId(req.query.recipeId);
+
+   if (!recipeId) return res.json([]);
+
+   try {
+      const { rows } = await pool.query(selectImagesQuery, [recipeId]);
+      res.json(rows);
+   }
+   catch (e) {
+      res.status(500).json({ error: String(e) });
+   }
+});
+
+const selectImagesQuery = `select id, url, alt, sort_order
+                           from recipe_images
+                           where recipe_id = $1
+                           order by sort_order, id`;
+
+const MAX_IMAGES = 20;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_ALT_LENGTH = 200;
+
+//Uploads are held in memory just long enough for sharp to resize them
+const upload = multer({
+   storage: multer.memoryStorage(),
+   limits: { fileSize: MAX_IMAGE_BYTES, files: MAX_IMAGES },
+   fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith('image/'))
+}).array('images', MAX_IMAGES);
+
+//Runs multer and turns its errors (file too big, too many files) into a 400 with a readable message
+function receiveImages(req, res, next) {
+   upload(req, res, (err) => {
+      if (!err) return next();
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: `Each photo must be ${MAX_IMAGE_BYTES / 1024 / 1024} MB or smaller.` });
+      if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: `A recipe can have up to ${MAX_IMAGES} photos.` });
+      next(err);
+   });
+}
+
+/*----------------------------------------------
+ * PUT /api/recipes/:id/images
+ * multipart/form-data:
+ *   images   - the newly added photo files
+ *   manifest - JSON array giving the full image list in display order:
+ *              [{ id, alt }]     an image the recipe already has
+ *              [{ upload, alt }] the nth file in 'images'
+ * Images the recipe has that aren't in the manifest are deleted (row and file).
+ * New photos are auto-rotated, shrunk to fit 1600px and saved as WebP.
+ *----------------------------------------------*/
+app.put('/api/recipes/:id/images', receiveImages, async (req, res) => {
+
+   const recipeId = parseId(req.params.id);
+
+   if (!recipeId) return res.status(400).json({ error: 'id is required' });
+
+   const files = req.files ?? [];
+   const { error, manifest } = parseImageManifest(req.body?.manifest, files.length);
+
+   if (error) return res.status(400).json({ error });
+
+   //Write the new files before touching the database, and remove them again if anything fails
+   const written = [];
+
+   try {
+      for (const file of files) {
+         const name = `${recipeId}-${randomUUID()}.webp`;
+
+         try {
+            await sharp(file.buffer)
+               .rotate()   // honour the phone's EXIF orientation
+               .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+               .webp({ quality: 80 })
+               .toFile(path.join(IMAGE_DIR, name));
+         }
+         catch {
+            await removeImageFiles(written);
+            return res.status(400).json({ error: `Couldn't read "${file.originalname}" as an image. Try a JPEG or PNG.` });
+         }
+
+         written.push(`images/${name}`);
+      }
+   }
+   catch (e) {
+      await removeImageFiles(written);
+      console.error(e);
+      return res.status(500).json({ error: String(e) });
+   }
+
+   const client = await pool.connect();
+   let removed = [];
+
+   try {
+      await client.query('BEGIN');
+
+      const { rows: recipe } = await client.query(`SELECT id FROM recipes WHERE id = $1 FOR UPDATE`, [recipeId]);
+
+      if (!recipe.length) {
+         await rollback(client);
+         await removeImageFiles(written);
+         return res.status(404).json({ error: 'not found' });
+      }
+
+      const { rows: existing } = await client.query(`SELECT id, url FROM recipe_images WHERE recipe_id = $1`, [recipeId]);
+      const existingIds = new Set(existing.map(r => Number(r.id)));
+      const keptIds = new Set(manifest.filter(m => m.id).map(m => m.id));
+
+      if ([...keptIds].some(id => !existingIds.has(id))) {
+         await rollback(client);
+         await removeImageFiles(written);
+         return res.status(400).json({ error: 'Unknown image.' });
+      }
+
+      removed = existing.filter(r => !keptIds.has(Number(r.id))).map(r => r.url);
+
+      await client.query(`DELETE FROM recipe_images WHERE recipe_id = $1 AND NOT (id = ANY($2::bigint[]))`, [recipeId, [...keptIds]]);
+
+      for (const [index, item] of manifest.entries()) {
+
+         if (item.id) {
+            await client.query(`UPDATE recipe_images SET alt = $1, sort_order = $2 WHERE id = $3`,
+                               [item.alt, index + 1, item.id]);
+         } else {
+            await client.query(`INSERT INTO recipe_images (recipe_id, url, alt, sort_order) VALUES ($1, $2, $3, $4)`,
+                               [recipeId, written[item.upload], item.alt, index + 1]);
+         }
+      }
+
+      await client.query('COMMIT');
+   }
+   catch (e) {
+      await rollback(client);
+      await removeImageFiles(written);
+      console.error(e);
+      return res.status(500).json({ error: String(e) });
+   }
+   finally {
+      client.release();
+   }
+
+   //Only delete files once the rows pointing at them are gone for good
+   await removeImageFiles(removed);
+
+   const { rows } = await pool.query(selectImagesQuery, [recipeId]);
+   res.json(rows);
+});
+
+//Validates the manifest for PUT /api/recipes/:id/images. Returns { error } or { manifest }
+function parseImageManifest(text, fileCount) {
+
+   let list;
+   try { list = JSON.parse(text ?? '[]'); }
+   catch { return { error: 'manifest must be JSON' }; }
+
+   if (!Array.isArray(list)) return { error: 'manifest must be an array' };
+   if (list.length > MAX_IMAGES) return { error: `A recipe can have up to ${MAX_IMAGES} photos.` };
+
+   const manifest = [];
+   const usedUploads = new Set();
+
+   for (const item of list) {
+
+      const alt = String(item?.alt ?? '').trim();
+      if (alt.length > MAX_ALT_LENGTH) return { error: `Keep photo captions to ${MAX_ALT_LENGTH} characters or fewer.` };
+
+      if (item?.id !== undefined) {
+         const id = parseId(item.id);
+         if (!id) return { error: 'Unknown image.' };
+         manifest.push({ id, alt: alt || null });
+      }
+      else {
+         const n = Number(item?.upload);
+         if (!Number.isInteger(n) || n < 0 || n >= fileCount || usedUploads.has(n)) {
+            return { error: 'A photo was not uploaded. Only JPEG, PNG, WebP and GIF images are accepted.' };
+         }
+         usedUploads.add(n);
+         manifest.push({ upload: n, alt: alt || null });
+      }
+   }
+
+   if (usedUploads.size !== fileCount) return { error: 'Every uploaded photo must be listed in the manifest.' };
+
+   return { manifest };
+}
+
+//Deletes image files by their recipe_images.url. A missing file isn't an error
+async function removeImageFiles(urls) {
+   for (const url of urls) {
+      try { await fs.unlink(path.join(IMAGE_DIR, path.basename(url))); }
+      catch (e) { if (e.code !== 'ENOENT') console.error('[images] could not delete', url, e.message); }
+   }
+}
 
 //Converts an optional numeric value to an integer. Blank -> null, non-integer -> NaN
 function toIntOrNull(value) {

@@ -538,3 +538,64 @@
     transition: none;
   }
 }
+
+/* ---------- Photos ---------- */
+.imageGrid {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.imageCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--ar-border);
+  border-radius: 14px;
+  background: var(--ar-subtle);
+}
+
+.imageCard .rowActions {
+  justify-content: flex-end;
+}
+
+.imageFrame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--ar-border);
+}
+
+.imageFrame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.coverBadge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ar-primary);
+}
+
+/* The file input is visually hidden inside its label, so show focus on the label instead */
+label.addRowBtn {
+  display: inline-block;
+}
+
+label.addRowBtn:focus-within {
+  outline: 2px solid var(--ar-accent);
+  outline-offset: 2px;
+}

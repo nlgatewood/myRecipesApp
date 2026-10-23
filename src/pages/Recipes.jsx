@@ -1,7 +1,8 @@
 // Recipes.jsx
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { deleteRecipe, getRecipeDetails, getRecipeIngredients, getRecipeSteps, listCategories } from '../api';
+import { deleteRecipe, getRecipeDetails, getRecipeImages, getRecipeIngredients, getRecipeSteps, imageSrc,
+         listCategories } from '../api';
 import { formatMinutes, formatQuantity, totalMinutes } from '../format';
 import styles from '../css/Recipes.module.css';
 
@@ -35,6 +36,8 @@ export default function Recipes() {
    const [recipe, setRecipe] = useState(null);
    const [recipeIngredients, setRecipeIngredients] = useState([]);
    const [recipeSteps, setRecipeSteps] = useState([]);
+   const [recipeImages, setRecipeImages] = useState([]);
+   const [shownImage, setShownImage] = useState(0);   // index of the photo shown large
    const [categoryTitles, setCategoryTitles] = useState([]);
    const [status, setStatus] = useState('loading');   // loading | ready | notFound | error
    const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -48,10 +51,11 @@ export default function Recipes() {
          setStatus('loading');
 
          try {
-            const [recipeData, ingredientData, stepData, categoryData] = await Promise.all([
+            const [recipeData, ingredientData, stepData, imageData, categoryData] = await Promise.all([
                getRecipeDetails(recipeId),
                getRecipeIngredients(recipeId),
                getRecipeSteps(recipeId),
+               getRecipeImages(recipeId),
                listCategories()
             ]);
 
@@ -64,6 +68,8 @@ export default function Recipes() {
             setRecipe(recipeData);
             setRecipeIngredients(ingredientData);
             setRecipeSteps(stepData);
+            setRecipeImages(imageData);
+            setShownImage(0);
             setCategoryTitles(categoryPath(categoryData, recipeData.category_code));
             setStatus('ready');
 
@@ -133,6 +139,8 @@ export default function Recipes() {
       { label: 'Total time', value: formatMinutes(totalTime) }
    ];
 
+   const mainImage = recipeImages[shownImage] ?? recipeImages[0];
+
    const keywords = (recipe.keywords ?? '').split(',').map(k => k.trim()).filter(Boolean);
 
    return (
@@ -144,7 +152,7 @@ export default function Recipes() {
 
                {!confirmingDelete && (
                   <div className={styles.toolbarActions}>
-                     <button type="button" className={styles.printBtn} onClick={onPrint}
+                     <button type="button" className={styles.iconBtn} onClick={onPrint}
                              aria-label="Print or save as PDF" title="Print or save as PDF">
                         {/* Printer */}
                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -153,9 +161,24 @@ export default function Recipes() {
                            <path d="M7 14h10v7H7z" />
                         </svg>
                      </button>
-                     <Link to={`/recipes/${recipeId}/edit`} className={styles.editBtn}>Edit recipe</Link>
-                     <button type="button" className={styles.deleteBtn} onClick={() => setConfirmingDelete(true)}>
-                        Delete
+                     <Link to={`/recipes/${recipeId}/edit`} className={styles.iconBtn}
+                           aria-label="Edit recipe" title="Edit recipe">
+                        {/* Pencil */}
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                           <path d="M12 20h9" />
+                           <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+                        </svg>
+                     </Link>
+                     <button type="button" className={`${styles.iconBtn} ${styles.deleteIconBtn}`}
+                             onClick={() => setConfirmingDelete(true)}
+                             aria-label="Delete recipe" title="Delete recipe">
+                        {/* Trash can */}
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                           <path d="M3 6h18" />
+                           <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                           <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                           <path d="M10 11v6M14 11v6" />
+                        </svg>
                      </button>
                   </div>
                )}
@@ -165,7 +188,7 @@ export default function Recipes() {
             {confirmingDelete && (
                <div className={styles.confirmBox} role="alertdialog" aria-labelledby="confirm-delete-text">
                   <p id="confirm-delete-text">
-                     Delete <strong>{recipe.name}</strong>? Its ingredients list and steps will be removed too. This can't be undone.
+                     Delete <strong>{recipe.name}</strong>? Its ingredients list, steps and photos will be removed too. This can't be undone.
                   </p>
                   {deleteError && <p className={styles.deleteError}>{deleteError}</p>}
 
@@ -198,6 +221,29 @@ export default function Recipes() {
                   </ul>
                )}
             </header>
+
+            {/* ---------- Photos (in sort_order; the first is the main one) ---------- */}
+            {mainImage && (
+               <section className={styles.gallery} aria-label="Photos">
+                  <figure className={styles.mainPhoto}>
+                     <img src={imageSrc(mainImage.url)} alt={mainImage.alt || recipe.name} />
+                     {mainImage.alt && <figcaption>{mainImage.alt}</figcaption>}
+                  </figure>
+
+                  {recipeImages.length > 1 && (
+                     <ul className={styles.thumbs}>
+                        {recipeImages.map((image, index) => (
+                           <li key={image.id}>
+                              <button type="button" className={styles.thumb} onClick={() => setShownImage(index)}
+                                      aria-label={`Show photo ${index + 1}`} aria-current={image === mainImage}>
+                                 <img src={imageSrc(image.url)} alt="" loading="lazy" />
+                              </button>
+                           </li>
+                        ))}
+                     </ul>
+                  )}
+               </section>
+            )}
 
             {/* ---------- Time & Servings ---------- */}
             <section className={styles.section}>

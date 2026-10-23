@@ -79,6 +79,59 @@ export async function getRecipeSteps(recipeId) {
 }
 
 /*--------------------------------------
+ * getRecipeImages()
+ * [{ id, url, alt, sort_order }] in display order
+ *--------------------------------------*/
+export async function getRecipeImages(recipeId) {
+
+  const params = new URLSearchParams({ recipeId });
+
+  const res = await fetch(`${apiPath('recipe-images')}?${params}`, { credentials: 'same-origin' });
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * saveRecipeImages()
+ * Replaces a recipe's image list. images: [{ id, alt }] for saved images, [{ file, alt }] for new ones,
+ * in display order. Saved images left out are deleted. Resolves to the new list
+ *--------------------------------------*/
+export async function saveRecipeImages(recipeId, images) {
+
+  const body = new FormData();
+  const manifest = [];
+
+  for (const image of images) {
+    if (image.file) {
+      manifest.push({ upload: body.getAll('images').length, alt: image.alt });
+      body.append('images', image.file);
+    } else {
+      manifest.push({ id: image.id, alt: image.alt });
+    }
+  }
+
+  body.append('manifest', JSON.stringify(manifest));
+
+  //No Content-Type header: the browser sets the multipart boundary itself
+  const res = await fetch(apiPath(`recipes/${encodeURIComponent(recipeId)}/images`), {
+    method: 'PUT',
+    credentials: 'same-origin',
+    body
+  });
+
+  if (res.ok) return res.json();
+
+  let msg = res.status === 413 ? 'The photos are too large to upload together.' : (res.statusText || 'Upload failed');
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch { /* no JSON body */ }
+  throw new Error(msg);
+}
+
+/*--------------------------------------
+ * imageSrc()
+ * Turns a recipe_images.url ('images/<file>') into a URL the browser can load
+ *--------------------------------------*/
+export const imageSrc = (url) => apiPath(url);
+
+/*--------------------------------------
  * insertRecipe()
  * Saves a recipe with its ingredients and steps. Resolves to { id }
  *--------------------------------------*/
