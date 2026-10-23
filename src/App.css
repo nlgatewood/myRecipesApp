@@ -5,6 +5,19 @@
   text-align: center;
 }
 
+/* Smaller outer gutter on tablets/phones; HeaderMenu's own 16px padding still keeps content off the edge */
+@media (max-width: 760px) {
+  #root {
+    padding: 1rem 0;
+  }
+}
+
+@media (max-width: 600px) {
+  #root {
+    padding: 0.5rem 0;
+  }
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

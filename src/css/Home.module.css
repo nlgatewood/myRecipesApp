@@ -1,0 +1,5 @@
+/* ===== Scoped styles: only affect the Home page ======================= */
+
+.page {
+  text-align: left;
+}

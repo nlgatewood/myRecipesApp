@@ -1,0 +1,188 @@
+/* ===== Scoped styles: only affect the RecipeSearch component ========== */
+/* Results reuse the Categories panel/card styles; this file covers the search bar itself */
+
+.searchBar {
+  --sb-bg: #ffffff;
+  --sb-border: #d6dbe7;
+  --sb-fg: #111827;
+  --sb-muted: #6b7280;
+  --sb-accent: #4f46e5;
+  --sb-ring: rgba(79, 70, 229, 0.18);
+  --sb-subtle: #f3f4f8;
+  --sb-shadow: 0 10px 30px rgba(20, 28, 45, 0.06);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 50%;
+  margin: 0 0 20px;
+  box-sizing: border-box;
+}
+
+@media (prefers-color-scheme: dark) {
+  .searchBar {
+    --sb-bg: #1b1f2a;
+    --sb-border: #3a4152;
+    --sb-fg: #e5e7eb;
+    --sb-muted: #9ca3af;
+    --sb-accent: #a5b4fc;
+    --sb-ring: rgba(165, 180, 252, 0.25);
+    --sb-subtle: #2a3040;
+    --sb-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+}
+
+.searchBar input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 52px 16px 50px;
+  border: 1px solid var(--sb-border);
+  border-radius: 16px;
+  font: inherit;
+  font-size: 1.05rem;
+  color: var(--sb-fg);
+  background: var(--sb-bg);
+  box-shadow: var(--sb-shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Hide the browser's built-in clear button; we have our own */
+.searchBar input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.searchBar input::placeholder {
+  color: var(--sb-muted);
+}
+
+.searchBar input:focus {
+  outline: none;
+  border-color: var(--sb-accent);
+  box-shadow: 0 0 0 4px var(--sb-ring), var(--sb-shadow);
+}
+
+.icon {
+  position: absolute;
+  left: 18px;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--sb-muted);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.searchBar:focus-within .icon {
+  stroke: var(--sb-accent);
+}
+
+.clearBtn {
+  position: absolute;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: var(--sb-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  color: var(--sb-fg);
+  background: var(--sb-subtle);
+}
+
+.clearBtn:focus-visible {
+  outline: 2px solid var(--sb-accent);
+  outline-offset: 2px;
+}
+
+.shortcut {
+  position: absolute;
+  right: 16px;
+  padding: 2px 8px;
+  border: 1px solid var(--sb-border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--sb-muted);
+  pointer-events: none;
+}
+
+.searchBar:focus-within .shortcut {
+  display: none;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Results extras (inside the Categories .panel, so --cp-* tokens apply) ---------- */
+.tip {
+  font-size: 0.88rem;
+}
+
+.linkBtn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--cp-accent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  background: var(--cp-accent-weak);
+}
+
+.linkBtn:focus-visible {
+  outline: 2px solid var(--cp-accent);
+  outline-offset: 2px;
+}
+
+.footer {
+  margin: 18px 0 -6px -10px;
+}
+
+/* ---------- Phone ---------- */
+/* Full width on tablets/phones; half width would be too cramped to type in */
+@media (max-width: 760px) {
+  .searchBar {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .searchBar {
+    margin-bottom: 14px;
+  }
+
+  .searchBar input {
+    padding: 14px 46px 14px 44px;
+    font-size: 16px; /* prevents iPhone zoom on focus */
+    border-radius: 14px;
+  }
+
+  .icon {
+    left: 15px;
+  }
+
+  .shortcut {
+    display: none;   /* no "/" key shortcut on phones */
+  }
+}

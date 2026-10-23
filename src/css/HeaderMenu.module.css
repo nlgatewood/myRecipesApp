@@ -35,11 +35,74 @@
   }
 }
 
-/* Title */
-.headerwrapper > h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: clamp(1.25rem, 1.6vw + 1rem, 2rem);
-  letter-spacing: -0.015em;
+/* Site header (shown on every page, above the menu) */
+.siteHeader {
+  display: flex;
+  align-items: center;
+  margin: 0 0 20px;
+  text-align: left;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--menu-fg);
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--menu-fg);
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--menu-ring);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #4f46e5;       /* same primary as the Save / Edit buttons */
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.25);
+}
+
+.logo svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brandName {
+  font-size: clamp(1.4rem, 1.6vw + 1rem, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+@media (max-width: 600px) {
+  .siteHeader {
+    margin-bottom: 10px;
+  }
+
+  .logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .logo svg {
+    width: 22px;
+    height: 22px;
+  }
 }
 
 /* Top nav container */
@@ -51,7 +114,7 @@
   gap: 12px;
   align-items: center;
   padding: 0.6rem 0.75rem;
-  margin: 0 0 1rem 0;
+  margin: 0 0 3rem 0;      /* space between the menu and the page content */
   background: var(--menu-bg);
   border: 1px solid var(--menu-border);
   border-radius: 0.75rem;
@@ -111,5 +174,13 @@
 @media (prefers-reduced-motion: reduce) {
   .headerwrapper .linklist a {
     transition: none;
+  }
+}
+
+/* A little less space under the menu on phones to save vertical space
+   (kept at the end so it overrides the base .linklist margin above) */
+@media (max-width: 600px) {
+  .headerwrapper .linklist {
+    margin-bottom: 1.75rem;
   }
 }

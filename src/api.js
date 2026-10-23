@@ -79,6 +79,97 @@ export async function getRecipeSteps(recipeId) {
 }
 
 /*--------------------------------------
+ * insertRecipe()
+ * Saves a recipe with its ingredients and steps. Resolves to { id }
+ *--------------------------------------*/
+export async function insertRecipe(recipe) {
+
+  const res = await fetch(apiPath('recipes'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(recipe)
+  });
+
+  if (res.ok) return res.json();
+
+  // Surface the server's error message instead of the raw status line
+  let msg = res.statusText || 'Save failed';
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch { /* no JSON body */ }
+  throw new Error(msg);
+}
+
+/*--------------------------------------
+ * updateRecipe()
+ * Replaces a recipe's details, ingredients and steps. Resolves to { id }
+ *--------------------------------------*/
+export async function updateRecipe(id, recipe) {
+
+  const res = await fetch(apiPath(`recipes/${encodeURIComponent(id)}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(recipe)
+  });
+
+  if (res.ok) return res.json();
+
+  let msg = res.statusText || 'Save failed';
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch { /* no JSON body */ }
+  throw new Error(msg);
+}
+
+/*--------------------------------------
+ * deleteRecipe()
+ *
+ *--------------------------------------*/
+export async function deleteRecipe(id) {
+
+  const res = await fetch(apiPath(`recipes/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  });
+
+  if (res.status === 204) return true;
+
+  let msg = res.statusText || 'Delete failed';
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch { /* no JSON body */ }
+  throw new Error(msg);
+}
+
+/*--------------------------------------
+ * searchRecipes()
+ * Searches recipe names and keywords
+ *--------------------------------------*/
+export async function searchRecipes(q) {
+
+  const params = new URLSearchParams({ q });
+
+  const res = await fetch(`${apiPath('recipe-search')}?${params}`, { credentials: 'same-origin' });
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * getRecipeCounts()
+ * Recipes filed directly under each category: [{ category_code, count }]
+ *--------------------------------------*/
+export async function getRecipeCounts() {
+
+  const res = await fetch(apiPath('recipe-counts'), { credentials: 'same-origin' });
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
+ * listCategories()
+ *
+ *--------------------------------------*/
+export async function listCategories() {
+
+  const res = await fetch(apiPath('categories'), { credentials: 'same-origin' });
+  return jsonOrThrow(res);
+}
+
+/*--------------------------------------
  * getCategoriesByParent()
  *
  *--------------------------------------*/
@@ -103,12 +194,16 @@ export async function getCategoriesByParent(parentCode) {
  * getRecipesByCategory()
  *
  *--------------------------------------*/
-export async function getRecipesByCategory(categoryCode) {
+export async function getRecipesByCategory(categoryCode, { includeSubcategories = false } = {}) {
 
   const params = new URLSearchParams();
 
   if (categoryCode) {
     params.set('categoryCode', categoryCode);
+  }
+
+  if (includeSubcategories) {
+    params.set('includeSubcategories', 'true');
   }
 
   const url = `${apiPath('recipes-by-category')}${
@@ -140,7 +235,13 @@ export async function insertUnits({ name, description }) {
     credentials: 'same-origin',
     body: JSON.stringify({ name, description })
   });
-  return jsonOrThrow(res);
+
+  if (res.ok) return res.json();
+
+  // Surface the server's error message (e.g. duplicate name) instead of the raw status line
+  let msg = res.statusText || 'Save failed';
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch { /* no JSON body */ }
+  throw new Error(msg);
 }
 
 /*--------------------------------------
@@ -151,14 +252,14 @@ export async function deleteUnit(id) {
   const c = String(id || '').trim();
   if (!c) throw new Error('id is required');
 
-  const res = await fetch(`${API_BASE}/units/${encodeURIComponent(c)}`, {
+  const res = await fetch(apiPath(`units/${encodeURIComponent(c)}`), {
     method: 'DELETE',
     credentials: 'same-origin',
   });
   if (res.status === 204) return true;
 
   let msg = res.statusText || 'Delete failed';
-  try { const data = await res.json(); if (data?.error) msg = data.error; } catch {}
+  try { const data = await res.json(); if (data?.error) msg = data.error; } catch { /* no JSON body */ }
   throw new Error(msg);
 }
 

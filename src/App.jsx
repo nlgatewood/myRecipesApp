@@ -17,6 +17,7 @@ function App() {
         <Route path="add-recipe" element={<AddRecipePanel />} />
         <Route path="site-maintenance" element={<SiteMaintenancePanel />} />
         <Route path="recipes/:recipeId" element={<Recipes />} />
+        <Route path="recipes/:recipeId/edit" element={<AddRecipePanel />} />
       </Route>
     </Routes>
   );

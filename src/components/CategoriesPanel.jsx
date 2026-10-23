@@ -1,91 +1,210 @@
-import React from "react";
-import { useEffect, useState } from 'react';
-import { apiHealth, getCategoriesByParent, getRecipesByCategory } from '../api';
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { getRecipeCounts, getRecipesByCategory, listCategories } from '../api';
+import RecipeCard from './RecipeCard';
 import styles from '../css/Categories.module.css';
 
+const ROOT = 'ALL';
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function CategoriesPanel() {
 
-   const [categories, setCategories] = useState(['ALL']);
-   const [parentCode, setParentCode] = useState(['ALL']);
-   const [breadCrumbs, setBreadCrumbs] = useState([{code:'ALL', title:'All'}]);
+   //The current category lives in the URL (?category=BRDFR) so the browser Back button walks
+   //up the tree, and returning from a recipe lands you where you left off
+   const [searchParams, setSearchParams] = useSearchParams();
+
+   const [categories, setCategories] = useState([]);
+   const [counts, setCounts] = useState({});
    const [recipes, setRecipes] = useState([]);
+   const [treeStatus, setTreeStatus] = useState('loading');      // loading | ready | error
+   const [recipesStatus, setRecipesStatus] = useState('loading'); // loading | ready | error
+
+   const byCode = useMemo(() => new Map(categories.map(c => [c.code, c])), [categories]);
+
+   //parent code -> child categories, sorted by title
+   const childrenOf = useMemo(() => {
+      const map = new Map();
+      for (const c of categories) {
+         if (!map.has(c.parent_code)) map.set(c.parent_code, []);
+         map.get(c.parent_code).push(c);
+      }
+      for (const list of map.values()) list.sort((a, b) => a.title.localeCompare(b.title));
+      return map;
+   }, [categories]);
+
+   //category code -> recipes in it and everything nested under it
+   const totals = useMemo(() => {
+      const result = new Map();
+      const total = (code, depth = 0) => {
+         if (result.has(code)) return result.get(code);
+         let sum = counts[code] ?? 0;
+         if (depth < 20) {
+            for (const child of childrenOf.get(code) ?? []) sum += total(child.code, depth + 1);
+         }
+         result.set(code, sum);
+         return sum;
+      };
+      categories.forEach(c => total(c.code));
+      return result;
+   }, [categories, childrenOf, counts]);
+
+   //Fall back to the root if the URL names a category that doesn't exist
+   const requested = searchParams.get('category') || ROOT;
+   const currentCode = treeStatus === 'ready' && !byCode.has(requested) ? ROOT : requested;
+   const current = byCode.get(currentCode);
+   const subcategories = childrenOf.get(currentCode) ?? [];
+
+   //Breadcrumbs from the root down to the current category
+   const path = [];
+   for (let cur = current, depth = 0; cur && depth < 20; cur = byCode.get(cur.parent_code), depth++) {
+      path.unshift(cur);
+   }
 
    useEffect(() => {
 
       async function loadCategories() {
 
          try {
-            const categoryData = await getCategoriesByParent(parentCode);
-            setCategories(categoryData);
+            const [categoryData, countData] = await Promise.all([listCategories(), getRecipeCounts()]);
 
-            const recipesData = await getRecipesByCategory(parentCode);
-            setRecipes(recipesData);
+            setCategories(categoryData);
+            setCounts(Object.fromEntries(countData.map(row => [row.category_code, row.count])));
+            setTreeStatus('ready');
 
          } catch (err) {
             console.error("Failed to load categories:", err);
-         } 
+            setTreeStatus('error');
+         }
       }
 
-    loadCategories();
-  }, [parentCode]);
+      loadCategories();
+   }, []);
 
-   //Handler for when a category is clicked. set the Breadcrumbs and parent code
-   const handleCategoryClick = (category) => {
+   useEffect(() => {
 
-      setBreadCrumbs((prev) => [
-         ...prev,
-         {code: category.code,
-          title: category.title}
-      ]);
+      let ignore = false;   // drop the response if the user has already moved to another category
 
-      setParentCode(category.code);
+      async function loadRecipes() {
+
+         setRecipesStatus('loading');
+
+         try {
+            //"All recipes" lists everything; any other category lists only the recipes filed directly in it
+            const recipesData = await getRecipesByCategory(currentCode, { includeSubcategories: currentCode === ROOT });
+
+            if (!ignore) {
+               setRecipes(recipesData);
+               setRecipesStatus('ready');
+            }
+         } catch (err) {
+            console.error("Failed to load recipes:", err);
+            if (!ignore) setRecipesStatus('error');
+         }
+      }
+
+      loadRecipes();
+      return () => { ignore = true; };
+   }, [currentCode]);
+
+   const openCategory = (code) => {
+      setSearchParams(code === ROOT ? {} : { category: code });
    };
 
-   //Handler for when a breadcrumb is clicked. Remove all the ones ahead of the one that was clicked
-   const handleBreadcrumbClick = (code) => {
+   const titleOf = (category) => (category.code === ROOT ? 'All recipes' : category.title);
 
-      const index = breadCrumbs.findIndex(b => b.code === code);
+   return (
+      <section className={styles.panel}>
 
-      setBreadCrumbs(breadCrumbs.slice(0, index + 1));
-      setParentCode(code);
-   };
+         {treeStatus === 'error' && (
+            <p className={styles.banner} role="alert">Could not load categories. Check that the API is running.</p>
+         )}
 
-  return (
-    <div>
-      <h2>Categories</h2>
+         {/* ---------- Breadcrumbs ---------- */}
+         {/* Always rendered (even at "All recipes", or before categories load) so the page doesn't jump */}
+         <nav aria-label="Category path">
+            <ol className={styles.breadcrumbs}>
+               {path.map((category, index) => (
+                  <li key={category.code}>
+                     {index < path.length - 1 ? (
+                        <button type="button" onClick={() => openCategory(category.code)}>{titleOf(category)}</button>
+                     ) : (
+                        <span aria-current="page">{titleOf(category)}</span>
+                     )}
+                  </li>
+               ))}
+            </ol>
+         </nav>
 
-      <div>
-         {breadCrumbs.map(path => (
+         {/* ---------- Subcategories ---------- */}
+         {subcategories.length > 0 && (
+            <div className={styles.section}>
+               <h3 className={styles.sectionTitle}>{currentCode === ROOT ? 'Categories' : 'Subcategories'}</h3>
 
-            <span key={path.code}>
-               <a href='#' onClick={() =>handleBreadcrumbClick(path.code)}>{path.title}</a> /
-            </span>
-         ))}
-      </div>
+               <ul className={styles.categoryGrid}>
+                  {subcategories.map(category => {
+                     //The tile counts recipes filed directly in the category, matching what opening it shows.
+                     //It's only dimmed when the whole branch is empty
+                     const recipeCount = counts[category.code] ?? 0;
+                     const branchEmpty = (totals.get(category.code) ?? 0) === 0;
+                     const childCount = (childrenOf.get(category.code) ?? []).length;
 
-      <div className={styles.categoryGrid}>
+                     return (
+                        <li key={category.code}>
+                           <button
+                              type="button"
+                              className={`${styles.categoryTile} ${branchEmpty ? styles.emptyTile : ''}`}
+                              onClick={() => openCategory(category.code)}
+                           >
+                              <span className={styles.tileTitle}>{category.title}</span>
+                              <span className={styles.tileMeta}>
+                                 {plural(recipeCount, 'recipe')}
+                                 {childCount > 0 && ` · ${childCount} ${childCount === 1 ? 'subcategory' : 'subcategories'}`}
+                              </span>
+                              <span className={styles.chevron} aria-hidden="true">›</span>
+                           </button>
+                        </li>
+                     );
+                  })}
+               </ul>
+            </div>
+         )}
 
-         {categories.map(category => (
-            <button onClick={() => handleCategoryClick(category)}>
-               {category.title}
-            </button>
+         {/* ---------- Recipes ---------- */}
+         <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+               <h3 className={styles.sectionTitle}>Recipes</h3>
+            </div>
 
-         ))}
-      </div>
+            {recipesStatus === 'loading' && recipes.length === 0 && <p className={styles.empty}>Loading recipes…</p>}
+            {recipesStatus === 'error' && <p className={styles.empty}>Could not load recipes.</p>}
 
-      <div>
-         {recipes.map(recipe => (
+            {recipesStatus === 'ready' && recipes.length === 0 && (
+               <div className={styles.empty}>
+                  <p>
+                     {subcategories.length > 0
+                        ? `No recipes directly in ${current?.title ?? 'this category'}. Open a subcategory above to see more.`
+                        : 'No recipes here yet.'}
+                  </p>
+                  <Link to={currentCode === ROOT ? '/add-recipe' : `/add-recipe?category=${encodeURIComponent(currentCode)}`}>
+                     + Add a recipe{current && currentCode !== ROOT ? ` to ${current.title}` : ''}
+                  </Link>
+               </div>
+            )}
 
-            <span key={recipe.code}>
-                <Link to={`/recipes/${recipe.id}`}>{recipe.name}</Link>
-            </span>
-         ))}    
-      </div>
-
-    </div>
-  );
+            {recipes.length > 0 && (
+               <ul className={`${styles.recipeGrid} ${recipesStatus === 'loading' ? styles.stale : ''}`}>
+                  {recipes.map(recipe => (
+                     <li key={recipe.id}>
+                        {/* Label the category when it differs from the one being viewed (i.e. on All recipes) */}
+                        <RecipeCard recipe={recipe} showCategory={recipe.category_code !== currentCode} />
+                     </li>
+                  ))}
+               </ul>
+            )}
+         </div>
+      </section>
+   );
 }
 
 export default CategoriesPanel;
