@@ -5,7 +5,7 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: #12151d;   /* a step darker than the #1b1f2a cards so they stand out */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -24,6 +24,7 @@ a:hover {
 
 body {
   margin: 0;
+  background-color: inherit;   /* explicit, so mobile browsers' auto-dark doesn't repaint the page */
   min-width: 320px;
   min-height: 100vh;
 }

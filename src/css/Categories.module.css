@@ -181,8 +181,15 @@
   list-style: none;
 }
 
+/* Grid items default to min-width: auto, which lets a long word or URL push a card past the panel */
+.categoryGrid > li,
+.recipeGrid > li {
+  min-width: 0;
+}
+
+/* min(…, 100%) keeps a single column from overflowing when the panel is narrower than the minimum */
 .categoryGrid {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
 }
 
 .categoryTile {
@@ -211,6 +218,7 @@
 }
 
 .tileTitle {
+  overflow-wrap: anywhere;
   font-weight: 700;
   font-size: 1.02rem;
 }
@@ -242,7 +250,7 @@
 
 /* ---------- Recipe cards ---------- */
 .recipeGrid {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   transition: opacity 0.15s ease;
 }
 
@@ -263,6 +271,8 @@
   border-left: 4px solid var(--cp-accent);
   border-radius: 14px;
   text-decoration: none;
+  min-width: 0;
+  overflow-wrap: anywhere;   /* break long names/descriptions instead of overflowing */
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
@@ -340,6 +350,10 @@
     gap: 10px;
   }
 
+  .recipeCard {
+    padding: 14px;
+  }
+
   .categoryTile {
     padding: 14px 32px 14px 14px;
   }
@@ -349,7 +363,7 @@
   }
 
   .recipeGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

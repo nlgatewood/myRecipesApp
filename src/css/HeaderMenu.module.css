@@ -17,6 +17,7 @@
   --menu-accent: #2563eb;    /* blue-600 */
   --menu-accent-weak: rgba(37, 99, 235, 0.12);
   --menu-ring: rgba(37, 99, 235, 0.45);
+  --menu-shadow: 0 8px 20px rgba(0,0,0,.04);
 
   color: var(--menu-fg);
   margin: 0 auto;
@@ -25,13 +26,18 @@
 
 @media (prefers-color-scheme: dark) {
   .headerwrapper {
-    --menu-bg: #0b1020;
+    --menu-bg: #1b1f2a;        /* same surface as the page cards */
     --menu-fg: #e5e7eb;
-    --menu-border: #1f2937;
+    --menu-border: #2d3343;
     --menu-muted: #9ca3af;
     --menu-accent: #60a5fa;
     --menu-accent-weak: rgba(96, 165, 250, 0.18);
     --menu-ring: rgba(96, 165, 250, 0.45);
+    --menu-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  .headerwrapper .logo {
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -118,7 +124,7 @@
   background: var(--menu-bg);
   border: 1px solid var(--menu-border);
   border-radius: 0.75rem;
-  box-shadow: 0 8px 20px rgba(0,0,0,.04);
+  box-shadow: var(--menu-shadow);
   overflow-x: auto;        /* graceful horizontal scroll on narrow screens */
   -webkit-overflow-scrolling: touch;
 }
