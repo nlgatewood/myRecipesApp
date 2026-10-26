@@ -1,12 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getRecipeCounts, getRecipesByCategory, listCategories } from '../api';
 import RecipeCard from './RecipeCard';
 import styles from '../css/Categories.module.css';
 
 const ROOT = 'ALL';
+const PAGE_SIZE = 10;
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+//Page numbers to show: always the first and last, plus a window around the current page,
+//with null marking a gap (e.g. 1 … 4 5 6 … 12)
+function pageList(current, total) {
+   const pages = [];
+   for (let p = 1; p <= total; p++) {
+      if (p === 1 || p === total || Math.abs(p - current) <= 1) pages.push(p);
+      else if (pages[pages.length - 1] !== null) pages.push(null);
+   }
+   return pages;
+}
 
 function CategoriesPanel() {
 
@@ -19,6 +31,8 @@ function CategoriesPanel() {
    const [recipes, setRecipes] = useState([]);
    const [treeStatus, setTreeStatus] = useState('loading');      // loading | ready | error
    const [recipesStatus, setRecipesStatus] = useState('loading'); // loading | ready | error
+
+   const recipesSection = useRef(null);
 
    const byCode = useMemo(() => new Map(categories.map(c => [c.code, c])), [categories]);
 
@@ -54,6 +68,13 @@ function CategoriesPanel() {
    const currentCode = treeStatus === 'ready' && !byCode.has(requested) ? ROOT : requested;
    const current = byCode.get(currentCode);
    const subcategories = childrenOf.get(currentCode) ?? [];
+
+   //The page also lives in the URL (?page=2); clamp it to the pages that exist
+   const pageCount = Math.max(1, Math.ceil(recipes.length / PAGE_SIZE));
+   const requestedPage = parseInt(searchParams.get('page'), 10) || 1;
+   const page = Math.min(Math.max(requestedPage, 1), pageCount);
+   const pageStart = (page - 1) * PAGE_SIZE;
+   const pageRecipes = recipes.slice(pageStart, pageStart + PAGE_SIZE);
 
    //Breadcrumbs from the root down to the current category
    const path = [];
@@ -109,6 +130,13 @@ function CategoriesPanel() {
 
    const openCategory = (code) => {
       setSearchParams(code === ROOT ? {} : { category: code });
+   };
+
+   const openPage = (next) => {
+      const params = currentCode === ROOT ? {} : { category: currentCode };
+      if (next > 1) params.page = String(next);
+      setSearchParams(params);
+      recipesSection.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
    };
 
    const titleOf = (category) => (category.code === ROOT ? 'All recipes' : category.title);
@@ -171,9 +199,14 @@ function CategoriesPanel() {
          )}
 
          {/* ---------- Recipes ---------- */}
-         <div className={styles.section}>
+         <div className={styles.section} ref={recipesSection}>
             <div className={styles.sectionHeader}>
                <h3 className={styles.sectionTitle}>Recipes</h3>
+               {pageCount > 1 && (
+                  <span className={styles.pageRange}>
+                     {pageStart + 1}–{pageStart + pageRecipes.length} of {recipes.length}
+                  </span>
+               )}
             </div>
 
             {recipesStatus === 'loading' && recipes.length === 0 && <p className={styles.empty}>Loading recipes…</p>}
@@ -194,13 +227,39 @@ function CategoriesPanel() {
 
             {recipes.length > 0 && (
                <ul className={`${styles.recipeGrid} ${recipesStatus === 'loading' ? styles.stale : ''}`}>
-                  {recipes.map(recipe => (
+                  {pageRecipes.map(recipe => (
                      <li key={recipe.id}>
                         {/* Label the category when it differs from the one being viewed (i.e. on All recipes) */}
                         <RecipeCard recipe={recipe} showCategory={recipe.category_code !== currentCode} />
                      </li>
                   ))}
                </ul>
+            )}
+
+            {pageCount > 1 && (
+               <nav className={styles.pagination} aria-label="Recipe pages">
+                  <button type="button" onClick={() => openPage(page - 1)} disabled={page === 1}>
+                     ‹ Prev
+                  </button>
+                  {pageList(page, pageCount).map((p, index) => (
+                     p === null ? (
+                        <span key={`gap-${index}`} className={styles.pageGap} aria-hidden="true">…</span>
+                     ) : (
+                        <button
+                           type="button"
+                           key={p}
+                           onClick={() => openPage(p)}
+                           aria-current={p === page ? 'page' : undefined}
+                           aria-label={`Page ${p}`}
+                        >
+                           {p}
+                        </button>
+                     )
+                  ))}
+                  <button type="button" onClick={() => openPage(page + 1)} disabled={page === pageCount}>
+                     Next ›
+                  </button>
+               </nav>
             )}
          </div>
       </section>

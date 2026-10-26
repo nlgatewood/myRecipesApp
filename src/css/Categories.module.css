@@ -329,10 +329,62 @@
   color: var(--cp-label);
 }
 
+/* ---------- Pagination ---------- */
+.pageRange {
+  font-size: 0.85rem;
+  color: var(--cp-muted);
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.pagination button {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--cp-label);
+  background: var(--cp-subtle);
+  border: 1px solid var(--cp-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: var(--cp-accent);
+  color: var(--cp-accent);
+}
+
+.pagination button[aria-current="page"] {
+  color: var(--cp-card);
+  background: var(--cp-accent);
+  border-color: var(--cp-accent);
+}
+
+.pagination button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pageGap {
+  padding: 0 2px;
+  color: var(--cp-muted);
+}
+
 /* ---------- Focus ---------- */
 .categoryTile:focus-visible,
 .recipeCard:focus-visible,
 .breadcrumbs button:focus-visible,
+.pagination button:focus-visible,
 .empty a:focus-visible {
   outline: 2px solid var(--cp-accent);
   outline-offset: 2px;
@@ -371,7 +423,8 @@
   .categoryTile,
   .recipeCard,
   .chevron,
-  .recipeGrid {
+  .recipeGrid,
+  .pagination button {
     transition: none;
   }
 }
