@@ -5,7 +5,7 @@ import RecipeCard from './RecipeCard';
 import styles from '../css/Categories.module.css';
 
 const ROOT = 'ALL';
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
