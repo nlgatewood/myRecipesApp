@@ -33,7 +33,7 @@ pool.on('connect', async (client) => {
 
 //Recipe photos are kept on disk (outside the Vite build and git). recipe_images.url holds 'images/<file>',
 //which the client turns into /myrecipes/api/images/<file>
-const IMAGE_DIR = process.env.IMAGE_DIR || path.resolve(import.meta.dirname, '../data/images');
+const IMAGE_DIR = process.env.IMAGE_DIR || path.resolve(import.meta.dirname, '../images');
 await fs.mkdir(IMAGE_DIR, { recursive: true });
 
 //File names are unique and never rewritten, so browsers can cache them for good
