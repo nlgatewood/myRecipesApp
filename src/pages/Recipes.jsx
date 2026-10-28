@@ -1,5 +1,5 @@
 // Recipes.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { deleteRecipe, getRecipeDetails, getRecipeImages, getRecipeIngredients, getRecipeSteps, imageSrc,
          listCategories } from '../api';
@@ -43,6 +43,7 @@ export default function Recipes() {
    const [confirmingDelete, setConfirmingDelete] = useState(false);
    const [deleting, setDeleting] = useState(false);
    const [deleteError, setDeleteError] = useState('');
+   const photoViewerRef = useRef(null);   // <dialog> that shows the main photo uncropped
 
    useEffect(() => {
 
@@ -226,9 +227,20 @@ export default function Recipes() {
             {mainImage && (
                <section className={styles.gallery} aria-label="Photos">
                   <figure className={styles.mainPhoto}>
-                     <img src={imageSrc(mainImage.url)} alt={mainImage.alt || recipe.name} />
+                     {/* The photo is cropped to fit the page, so clicking it opens the whole thing */}
+                     <button type="button" className={styles.photoBtn} onClick={() => photoViewerRef.current?.showModal()}
+                             aria-label="View full photo" title="View full photo">
+                        <img src={imageSrc(mainImage.url)} alt={mainImage.alt || recipe.name} />
+                     </button>
                      {mainImage.alt && <figcaption>{mainImage.alt}</figcaption>}
                   </figure>
+
+                  {/* showModal() gives us Escape-to-close and the dimmed backdrop; a click anywhere closes it too */}
+                  <dialog ref={photoViewerRef} className={styles.photoViewer} aria-label="Full photo"
+                          onClick={() => photoViewerRef.current?.close()}>
+                     <img src={imageSrc(mainImage.url)} alt={mainImage.alt || recipe.name} />
+                     <button type="button" className={styles.photoViewerClose} aria-label="Close photo">×</button>
+                  </dialog>
 
                   {recipeImages.length > 1 && (
                      <ul className={styles.thumbs}>

@@ -212,19 +212,6 @@ function CategoriesPanel() {
             {recipesStatus === 'loading' && recipes.length === 0 && <p className={styles.empty}>Loading recipes…</p>}
             {recipesStatus === 'error' && <p className={styles.empty}>Could not load recipes.</p>}
 
-            {recipesStatus === 'ready' && recipes.length === 0 && (
-               <div className={styles.empty}>
-                  <p>
-                     {subcategories.length > 0
-                        ? `No recipes directly in ${current?.title ?? 'this category'}. Open a subcategory above to see more.`
-                        : 'No recipes here yet.'}
-                  </p>
-                  <Link to={currentCode === ROOT ? '/add-recipe' : `/add-recipe?category=${encodeURIComponent(currentCode)}`}>
-                     + Add a recipe{current && currentCode !== ROOT ? ` to ${current.title}` : ''}
-                  </Link>
-               </div>
-            )}
-
             {recipes.length > 0 && (
                <ul className={`${styles.recipeGrid} ${recipesStatus === 'loading' ? styles.stale : ''}`}>
                   {pageRecipes.map(recipe => (
@@ -235,6 +222,12 @@ function CategoriesPanel() {
                   ))}
                </ul>
             )}
+
+            <p className={styles.addRecipe}>
+               <Link to={currentCode === ROOT ? '/add-recipe' : `/add-recipe?category=${encodeURIComponent(currentCode)}`}>
+                  + Add a recipe{current && currentCode !== ROOT ? ` to ${current.title}` : ''}
+               </Link>
+            </p>
 
             {pageCount > 1 && (
                <nav className={styles.pagination} aria-label="Recipe pages">

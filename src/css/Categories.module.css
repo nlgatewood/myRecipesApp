@@ -153,6 +153,16 @@
   margin: 0;
 }
 
+.addRecipe {
+  margin: 18px 0 0;
+  text-align: center;
+}
+
+.addRecipe a {
+  font-weight: 600;
+  color: var(--cp-accent);
+}
+
 .empty {
   margin: 0;
   padding: 20px 16px;
@@ -160,15 +170,6 @@
   color: var(--cp-muted);
   border: 1px dashed var(--cp-border);
   border-radius: 12px;
-}
-
-.empty p {
-  margin: 0 0 6px;
-}
-
-.empty a {
-  font-weight: 600;
-  color: var(--cp-accent);
 }
 
 /* ---------- Category tiles ---------- */
@@ -385,7 +386,7 @@
 .recipeCard:focus-visible,
 .breadcrumbs button:focus-visible,
 .pagination button:focus-visible,
-.empty a:focus-visible {
+.addRecipe a:focus-visible {
   outline: 2px solid var(--cp-accent);
   outline-offset: 2px;
 }
